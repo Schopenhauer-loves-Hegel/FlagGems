@@ -6,9 +6,9 @@ This tool imports auto-generated operators from JSON files and integrates
 them into the FlagGems experimental framework.
 
 Usage:
-    python tools/experimental/import_from_json.py example.json
-    python tools/experimental/import_from_json.py example.json --category reduction
-    python tools/experimental/import_from_json.py example.json --dry-run
+    python src/flag_gems/experimental/tools/import_from_json.py example.json
+    python -m flag_gems.experimental.tools.import_from_json example.json --category reduction
+    python -m flag_gems.experimental.tools.import_from_json example.json --dry-run
 """
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+# Add src to path for imports (now we're inside src/flag_gems/experimental/tools/)
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
 from flag_gems.experimental.metadata import (
     MetadataManager,
@@ -56,11 +56,11 @@ class JSONImporter:
         self.force_category = category
         self.dry_run = dry_run
 
-        # Project paths
-        self.project_root = Path(__file__).parent.parent.parent
-        self.exp_root = self.project_root / "src" / "flag_gems" / "experimental"
+        # Project paths (now we're in src/flag_gems/experimental/tools/)
+        self.project_root = Path(__file__).parent.parent.parent.parent.parent
+        self.exp_root = Path(__file__).parent.parent  # experimental/
         self.generated_root = self.exp_root / "generated"
-        self.tests_root = self.project_root / "tests" / "experimental"
+        self.tests_root = self.exp_root / "tests"  # experimental/tests/
         self.metadata_file = self.generated_root / "_metadata.json"
 
         # Initialize metadata manager

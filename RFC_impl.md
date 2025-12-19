@@ -86,31 +86,39 @@ src/flag_gems/
 │   │   ├── tracker.json              # 算子状态追踪
 │   │   └── reporter.py               # 报告生成器
 │   │
-│   └── testing/                      # 实验性算子测试工具
+│   ├── testing/                      # 实验性算子测试工具
+│   │   ├── __init__.py
+│   │   ├── accuracy.py               # 精度验证
+│   │   ├── performance.py            # 性能测试
+│   │   └── report_template.md        # 报告模板
+│   │
+│   ├── tests/                        # 新增：实验性算子测试（自动生成）
+│   │   ├── __init__.py
+│   │   ├── test_generated_ops.py
+│   │   ├── test_dispatcher.py
+│   │   ├── test_graduation.py
+│   │   └── benchmarks/
+│   │       └── bench_experimental.py
+│   │
+│   └── tools/                        # 新增：实验性算子管理工具
 │       ├── __init__.py
-│       ├── accuracy.py               # 精度验证
-│       ├── performance.py            # 性能测试
-│       └── report_template.md        # 报告模板
+│       ├── import_from_json.py       # JSON 导入工具
+│       ├── exp_cli.py                # CLI 工具入口
+│       ├── list_ops.py               # 列出算子
+│       ├── check_graduation.py       # 检查毕业资格
+│       ├── propose_graduation.py     # 生成毕业 PR
+│       └── benchmark_runner.py       # 性能测试运行器
 │
-├── testing/                           # 主测试框架（已存在）
+├── testing/                           # 主测试框架（已存在，稳定内容）
 └── utils/                             # 工具函数（已存在）
 
-tests/
-├── experimental/                      # 新增：实验性算子测试
-│   ├── __init__.py
-│   ├── test_generated_ops.py
-│   ├── test_dispatcher.py
-│   ├── test_graduation.py
-│   └── benchmarks/
-│       └── bench_experimental.py
+tests/                                 # 主测试目录（稳定内容）
+├── test_*.py                          # 稳定算子的测试
+└── ...
 
-tools/
-├── experimental/                      # 新增：管理工具
-│   ├── exp_cli.py                    # CLI 工具入口
-│   ├── list_ops.py                   # 列出算子
-│   ├── check_graduation.py           # 检查毕业资格
-│   ├── propose_graduation.py         # 生成毕业 PR
-│   └── benchmark_runner.py           # 性能测试运行器
+tools/                                 # 主工具目录（稳定内容）
+├── *.py                               # 稳定的工具脚本
+└── ...
 
 docs/
 ├── experimental/                      # 新增：实验性功能文档
