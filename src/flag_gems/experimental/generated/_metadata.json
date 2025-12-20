@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "last_updated": "2025-12-19T16:32:00.914802",
+  "ops": {
+    "60a39af4-7b4d-4d9b-b511-d8915b1e5e76": {
+      "op_name": "huber_loss",
+      "op_id": "60a39af4-7b4d-4d9b-b511-d8915b1e5e76",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-19T16:32:00.899579",
+        "generation_config": {
+          "delta": 2.0,
+          "reduction": 2,
+          "dtype": "torch.bfloat16",
+          "shape": [
+            512,
+            512
+          ]
+        }
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 162,
+        "test_cases_passed": 162,
+        "last_run": "2025-12-19T16:32:00.899614",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/huber_loss.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-19T16:32:00.899657",
+      "updated_at": "2025-12-19T16:32:00.899662"
+    }
+  }
+}
