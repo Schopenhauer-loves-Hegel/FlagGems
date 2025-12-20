@@ -1,0 +1,27 @@
+# Ignore all data files by default
+*.json
+*.csv
+*.txt
+*.log
+
+# But keep README and example files
+!README.md
+!*_example.json
+
+# Keep results directory structure but ignore contents
+results/*
+!results/.gitkeep
+
+# Ignore operator code directories
+operator_code/
+
+# Ignore backup files
+*.tar.gz
+*.zip
+*.bak
+
+# Ignore temporary files
+*.tmp
+*.temp
+*~
+.DS_Store
