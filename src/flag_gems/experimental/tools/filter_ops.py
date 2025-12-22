@@ -10,9 +10,10 @@ Usage:
         --threshold 1.2 \
         --output selected_batch1.json
 
-    # Filter batch 2: New ops with 80% CUDA performance
+    # Filter batch 2: New ops (not in FlagGems) with 80% CUDA performance
     python filter_ops.py --batch 2 \
         --gpt-data-dir <gpt_data_dir> \
+        --flaggems-excel vendor-test-1106.xlsx \
         --threshold 0.8 \
         --output selected_batch2.json
 """
@@ -59,9 +60,11 @@ class OperatorFilter:
             if not self.flaggems_excel:
                 raise ValueError("--flaggems-excel is required for batch 1")
         elif batch == 2:
-            # Batch 2: GPT speedup / CUDA >= threshold
+            # Batch 2: GPT speedup / CUDA >= threshold (new ops not in FlagGems)
             self.threshold = threshold if threshold is not None else 0.80
             self.criterion = "speedup_vs_cuda"
+            if not self.flaggems_excel:
+                raise ValueError("--flaggems-excel is required for batch 2")
         else:
             raise ValueError(f"Invalid batch number: {batch}")
 
@@ -233,14 +236,37 @@ class OperatorFilter:
 
     def process_batch2(self) -> Dict[str, Any]:
         """
-        处理 Batch 2: GPT vs CUDA
+        处理 Batch 2: GPT vs CUDA (新算子)
 
-        筛选条件: gpt_speedup >= threshold
+        筛选条件:
+        1. gpt_speedup >= threshold
+        2. 算子不在 FlagGems 中（即 FlagGems 未实现的新算子）
         """
         # 1. 加载数据
         gpt_data = self.load_gpt_data()
+        flaggems_data = self.load_flaggems_excel()
 
-        # 2. 筛选
+        # 2. 筛选: 只保留 FlagGems 未实现的算子
+        self.log(f"Filtering new operators (not in FlagGems)...", "info")
+        new_ops = {}
+        skipped_existing = []
+
+        for op_name, data in gpt_data.items():
+            # 去掉 "aten::" 前缀进行比较
+            op_name_normalized = op_name.replace("aten::", "")
+
+            if op_name_normalized in flaggems_data:
+                # 算子已在 FlagGems 中实现，跳过
+                skipped_existing.append(op_name)
+                continue
+
+            new_ops[op_name] = data
+
+        self.log(f"Found {len(new_ops)} new operators not in FlagGems", "info")
+        if skipped_existing:
+            self.log(f"Skipped {len(skipped_existing)} operators already in FlagGems", "warning")
+
+        # 3. 按性能阈值筛选
         self.log(f"Filtering operators with speedup >= {self.threshold}...", "info")
         selected = {
             op_name: {
@@ -248,7 +274,7 @@ class OperatorFilter:
                 'code': data['code'],
                 'has_code': bool(data['code'])
             }
-            for op_name, data in gpt_data.items()
+            for op_name, data in new_ops.items()
             if data['speedup_vs_cuda'] >= self.threshold
         }
 
@@ -259,14 +285,16 @@ class OperatorFilter:
             reverse=True
         ))
 
-        self.log(f"Selected {len(selected)} operators (out of {len(gpt_data)} total)", "success")
+        self.log(f"Selected {len(selected)} operators (out of {len(new_ops)} new ops)", "success")
 
-        # 3. 生成输出
+        # 4. 生成输出
         output = {
             'batch': self.batch,
             'threshold': self.threshold,
             'criterion': self.criterion,
-            'total_operators': len(gpt_data),
+            'total_gpt_operators': len(gpt_data),
+            'new_operators': len(new_ops),
+            'existing_in_flaggems': len(skipped_existing),
             'selected_operators': len(selected),
             'operators': selected
         }
@@ -304,9 +332,18 @@ class OperatorFilter:
         print(f"Batch:              {result['batch']}")
         print(f"Threshold:          {result['threshold']}")
         print(f"Criterion:          {result['criterion']}")
-        print(f"Total operators:    {result['total_operators']}")
-        print(f"Selected:           {result['selected_operators']}")
-        print(f"Selection rate:     {result['selected_operators']/result['total_operators']*100:.1f}%")
+
+        if result['batch'] == 1:
+            print(f"Total operators:    {result['total_operators']}")
+            print(f"Selected:           {result['selected_operators']}")
+            print(f"Selection rate:     {result['selected_operators']/result['total_operators']*100:.1f}%")
+        else:  # batch 2
+            print(f"Total GPT operators:        {result['total_gpt_operators']}")
+            print(f"Existing in FlagGems:       {result['existing_in_flaggems']}")
+            print(f"New operators (not in FG):  {result['new_operators']}")
+            print(f"Selected (>= threshold):    {result['selected_operators']}")
+            if result['new_operators'] > 0:
+                print(f"Selection rate:             {result['selected_operators']/result['new_operators']*100:.1f}%")
 
         if result['selected_operators'] > 0:
             print(f"\n🏆 Top 10 operators:")
@@ -344,7 +381,7 @@ def main():
     parser.add_argument(
         "--flaggems-excel",
         type=Path,
-        help="Path to FlagGems Excel file (required for batch 1, e.g., vendor-test-1106.xlsx)"
+        help="Path to FlagGems Excel file (required for both batch 1 and 2, e.g., vendor-test-1106.xlsx)"
     )
     parser.add_argument(
         "--threshold",

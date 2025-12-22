@@ -4,11 +4,11 @@ huber_loss - Experimental Implementation
 This operator was automatically imported from generated code.
 
 Metadata:
-    op_id: 60a39af4-7b4d-4d9b-b511-d8915b1e5e76
+    op_id: b52f1091-f826-40ee-b676-b40e874ea3a0
     category: pointwise
     status: EXPERIMENTAL
     generator_tool: auto_codegen
-    generation_date: 2025-12-19T16:32:00.899579
+    generation_date: 2025-12-22T11:54:47.201327
 
 Warning:
     This is an experimental operator and may not be fully optimized or

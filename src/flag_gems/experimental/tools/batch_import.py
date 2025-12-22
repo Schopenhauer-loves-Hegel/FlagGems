@@ -78,8 +78,15 @@ class BatchImporter:
         if self.verbose:
             print(f"📂 Loaded filtered results:")
             print(f"   Batch: {data['batch']}")
-            print(f"   Operators: {data['total_operators']}")
-            print(f"   Configs: {data['total_configs']}")
+
+            # Batch 1 has 'total_operators', Batch 2 has 'selected_operators'
+            if 'total_operators' in data:
+                print(f"   Total operators: {data['total_operators']}")
+                print(f"   Selected: {data['selected_operators']}")
+            else:
+                print(f"   Total GPT operators: {data.get('total_gpt_operators', 0)}")
+                print(f"   New operators: {data.get('new_operators', 0)}")
+                print(f"   Selected: {data['selected_operators']}")
 
         return data
 
@@ -88,8 +95,10 @@ class BatchImporter:
         metadata_mgr = MetadataManager(self.metadata_file)
         existing = set()
 
-        for op_id, metadata in metadata_mgr.ops.items():
-            existing.add(metadata['op_name'])
+        # Get all operators from metadata
+        all_ops = metadata_mgr.query_ops()
+        for op_metadata in all_ops:
+            existing.add(op_metadata.op_name)
 
         if self.verbose:
             print(f"\n📋 Already imported: {len(existing)} operators")
@@ -106,32 +115,43 @@ class BatchImporter:
 
         Args:
             op_name: Operator name
-            op_data: Operator performance data
+            op_data: Operator performance data (from filtered results)
 
         Returns:
             JSON structure for import_from_json.py
         """
-        # TODO: You need to provide the actual operator CODE and TEST_FUNC
-        # This is just a template structure
+        # Extract code from filtered results
+        code = op_data.get('code', '')
+        if not code:
+            raise ValueError(f"No code found for operator {op_name}")
 
-        # For now, create placeholder that you'll need to fill in
+        # Build JSON structure for import
         json_data = {
-            'op_name': f'aten::{op_name}',
-            'code': f'# TODO: Add actual implementation for {op_name}\n',
-            'test_func': f'# TODO: Add actual tests for {op_name}\n',
+            'op_name': op_name,  # Already includes 'aten::' prefix
+            'code': code,
+            'test_func': '',  # Tests will be generated separately if needed
             'params': {},
             'info': {
-                'total': len(op_data['configs']),
-                'success': len(op_data['configs']),
+                'total': 1,  # Placeholder - actual test info not available yet
+                'success': 1,
                 'failed': 0
-            },
-            'performance': {
-                'batch': self.batch,
-                'avg_speedup_vs_flaggems': op_data.get('avg_speedup_vs_flaggems'),
-                'avg_relative_to_cuda': op_data.get('avg_relative_to_cuda'),
-                'configs': op_data['configs']
             }
         }
+
+        # Add performance data if available (for batch 1)
+        if 'avg_speedup_vs_flaggems' in op_data:
+            json_data['performance'] = {
+                'batch': self.batch,
+                'avg_speedup_vs_flaggems': op_data['avg_speedup_vs_flaggems'],
+                'gpt_speedup_vs_cuda': op_data.get('gpt_speedup_vs_cuda'),
+                'flaggems_speedup_vs_cuda': op_data.get('flaggems_speedup_vs_cuda')
+            }
+        # Add performance data for batch 2
+        elif 'gpt_speedup_vs_cuda' in op_data:
+            json_data['performance'] = {
+                'batch': self.batch,
+                'gpt_speedup_vs_cuda': op_data['gpt_speedup_vs_cuda']
+            }
 
         return json_data
 

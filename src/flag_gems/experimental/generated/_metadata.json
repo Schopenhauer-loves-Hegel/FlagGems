@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "last_updated": "2025-12-19T16:32:00.914802",
+  "last_updated": "2025-12-22T11:54:47.496173",
   "ops": {
     "60a39af4-7b4d-4d9b-b511-d8915b1e5e76": {
       "op_name": "huber_loss",
@@ -40,6 +40,1587 @@
       "graduation_tracking": {},
       "created_at": "2025-12-19T16:32:00.899657",
       "updated_at": "2025-12-19T16:32:00.899662"
+    },
+    "09150472-bf1d-4bdb-a3b5-785ded3c4a86": {
+      "op_name": "hinge_embedding_loss",
+      "op_id": "09150472-bf1d-4bdb-a3b5-785ded3c4a86",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.035393",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.035416",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/hinge_embedding_loss.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.035439",
+      "updated_at": "2025-12-22T11:54:47.035442"
+    },
+    "d56d9f5e-034e-4b52-8454-8ad73c379eb6": {
+      "op_name": "soft_margin_loss",
+      "op_id": "d56d9f5e-034e-4b52-8454-8ad73c379eb6",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.046627",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.046636",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/soft_margin_loss.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.046652",
+      "updated_at": "2025-12-22T11:54:47.046654"
+    },
+    "5a8ad871-8870-4978-a077-68dc18f8ef76": {
+      "op_name": "margin_ranking_loss",
+      "op_id": "5a8ad871-8870-4978-a077-68dc18f8ef76",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.055180",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.055190",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/margin_ranking_loss.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.055205",
+      "updated_at": "2025-12-22T11:54:47.055207"
+    },
+    "6ad28ae4-84ff-47f6-9956-86112566c94e": {
+      "op_name": "masked_scatter",
+      "op_id": "6ad28ae4-84ff-47f6-9956-86112566c94e",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.061799",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.061808",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/masked_scatter.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.061823",
+      "updated_at": "2025-12-22T11:54:47.061825"
+    },
+    "a2e74c0b-293c-4638-827e-7a92d47f2425": {
+      "op_name": "special_i0e",
+      "op_id": "a2e74c0b-293c-4638-827e-7a92d47f2425",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.073293",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.073302",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/special_i0e.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.073317",
+      "updated_at": "2025-12-22T11:54:47.073319"
+    },
+    "2587d4fa-221d-4b69-9c54-a90c63434287": {
+      "op_name": "prelu",
+      "op_id": "2587d4fa-221d-4b69-9c54-a90c63434287",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.084423",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.084431",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/prelu.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.084446",
+      "updated_at": "2025-12-22T11:54:47.084449"
+    },
+    "20a37f45-661e-4427-a690-058b78e71b33": {
+      "op_name": "arcsinh",
+      "op_id": "20a37f45-661e-4427-a690-058b78e71b33",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.090899",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.090908",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/arcsinh.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.090923",
+      "updated_at": "2025-12-22T11:54:47.090926"
+    },
+    "0826253b-199d-471b-bedc-20b84a03a2fc": {
+      "op_name": "logical_xor_",
+      "op_id": "0826253b-199d-471b-bedc-20b84a03a2fc",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.097168",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.097177",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/logical_xor_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.097193",
+      "updated_at": "2025-12-22T11:54:47.097195"
+    },
+    "15bb22b5-af05-4df6-966d-52ad93f6915f": {
+      "op_name": "logit",
+      "op_id": "15bb22b5-af05-4df6-966d-52ad93f6915f",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.105356",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.105365",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/logit.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.105380",
+      "updated_at": "2025-12-22T11:54:47.105382"
+    },
+    "1ca3c434-b00b-429b-84f6-03fb3c73031c": {
+      "op_name": "copy_",
+      "op_id": "1ca3c434-b00b-429b-84f6-03fb3c73031c",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.112666",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.112674",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/copy_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.112689",
+      "updated_at": "2025-12-22T11:54:47.112692"
+    },
+    "b5e68145-7122-47c1-8927-298e5804765d": {
+      "op_name": "clamp_max_",
+      "op_id": "b5e68145-7122-47c1-8927-298e5804765d",
+      "category": "reduction",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.123360",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.123369",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/reduction/clamp_max_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.123385",
+      "updated_at": "2025-12-22T11:54:47.123387"
+    },
+    "f6def166-880b-4645-bc72-81e6c7802e94": {
+      "op_name": "_functional_sym_constrain_range_for_size",
+      "op_id": "f6def166-880b-4645-bc72-81e6c7802e94",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.134339",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.134348",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/_functional_sym_constrain_range_for_size.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.134364",
+      "updated_at": "2025-12-22T11:54:47.134366"
+    },
+    "d3c338e8-39eb-4127-9f29-6f7d6e21c5d6": {
+      "op_name": "log1p_",
+      "op_id": "d3c338e8-39eb-4127-9f29-6f7d6e21c5d6",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.141946",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.141955",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/log1p_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.141970",
+      "updated_at": "2025-12-22T11:54:47.141972"
+    },
+    "060af504-29ea-4f47-bc32-b1af2c83505e": {
+      "op_name": "logaddexp",
+      "op_id": "060af504-29ea-4f47-bc32-b1af2c83505e",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.150052",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.150061",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/logaddexp.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.150076",
+      "updated_at": "2025-12-22T11:54:47.150078"
+    },
+    "e22bde86-63c8-457c-907b-ec8ffb429655": {
+      "op_name": "fmin",
+      "op_id": "e22bde86-63c8-457c-907b-ec8ffb429655",
+      "category": "reduction",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.161280",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.161289",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/reduction/fmin.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.161303",
+      "updated_at": "2025-12-22T11:54:47.161306"
+    },
+    "fda954d2-9725-49cf-91f5-a7a6405983c3": {
+      "op_name": "hardswish_backward",
+      "op_id": "fda954d2-9725-49cf-91f5-a7a6405983c3",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.175427",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.175436",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/hardswish_backward.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.175451",
+      "updated_at": "2025-12-22T11:54:47.175453"
+    },
+    "ad152dfc-e56c-45e8-a6ac-951cb828be19": {
+      "op_name": "softshrink",
+      "op_id": "ad152dfc-e56c-45e8-a6ac-951cb828be19",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.183830",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.183839",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/softshrink.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.183855",
+      "updated_at": "2025-12-22T11:54:47.183858"
+    },
+    "0e4ec43a-095e-4d9c-a33a-1db41bd2fc08": {
+      "op_name": "hypot",
+      "op_id": "0e4ec43a-095e-4d9c-a33a-1db41bd2fc08",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.192645",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.192662",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/hypot.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.192690",
+      "updated_at": "2025-12-22T11:54:47.192694"
+    },
+    "b52f1091-f826-40ee-b676-b40e874ea3a0": {
+      "op_name": "huber_loss",
+      "op_id": "b52f1091-f826-40ee-b676-b40e874ea3a0",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.201327",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.201343",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/huber_loss.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.201369",
+      "updated_at": "2025-12-22T11:54:47.201373"
+    },
+    "8780d2f3-a076-4fe8-9694-218e330bf90b": {
+      "op_name": "greater_equal_",
+      "op_id": "8780d2f3-a076-4fe8-9694-218e330bf90b",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.208825",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.208842",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/greater_equal_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.208870",
+      "updated_at": "2025-12-22T11:54:47.208874"
+    },
+    "9a2a17f8-227c-4742-bdbd-7e1885bf2804": {
+      "op_name": "smooth_l1_loss",
+      "op_id": "9a2a17f8-227c-4742-bdbd-7e1885bf2804",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.217257",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.217266",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/smooth_l1_loss.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.217281",
+      "updated_at": "2025-12-22T11:54:47.217283"
+    },
+    "6a66f4d7-33e6-4784-8dfe-187a64c1e570": {
+      "op_name": "atanh_",
+      "op_id": "6a66f4d7-33e6-4784-8dfe-187a64c1e570",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.226109",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.226118",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/atanh_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.226133",
+      "updated_at": "2025-12-22T11:54:47.226135"
+    },
+    "df5f393d-bbdf-4b18-a74b-5ce8948b8c27": {
+      "op_name": "ge_",
+      "op_id": "df5f393d-bbdf-4b18-a74b-5ce8948b8c27",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.234644",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.234653",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/ge_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.234668",
+      "updated_at": "2025-12-22T11:54:47.234670"
+    },
+    "efb18564-c31a-4b4b-8f1e-4ab911af8880": {
+      "op_name": "eq_",
+      "op_id": "efb18564-c31a-4b4b-8f1e-4ab911af8880",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.243051",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.243060",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/eq_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.243075",
+      "updated_at": "2025-12-22T11:54:47.243077"
+    },
+    "a575004f-a684-4b95-9ea8-a0ca1e68257b": {
+      "op_name": "lt_",
+      "op_id": "a575004f-a684-4b95-9ea8-a0ca1e68257b",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.251988",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.251997",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/lt_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.252012",
+      "updated_at": "2025-12-22T11:54:47.252014"
+    },
+    "ffb83189-a913-41dc-a3d4-2efd48f7d104": {
+      "op_name": "logaddexp2",
+      "op_id": "ffb83189-a913-41dc-a3d4-2efd48f7d104",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.260500",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.260516",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/logaddexp2.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.260542",
+      "updated_at": "2025-12-22T11:54:47.260546"
+    },
+    "56a24a29-076c-4490-a438-ce926692a245": {
+      "op_name": "hypot_",
+      "op_id": "56a24a29-076c-4490-a438-ce926692a245",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.268643",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.268652",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/hypot_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.268667",
+      "updated_at": "2025-12-22T11:54:47.268669"
+    },
+    "04360598-89ec-4ffa-962a-d9c8ced1b9e3": {
+      "op_name": "leaky_relu_",
+      "op_id": "04360598-89ec-4ffa-962a-d9c8ced1b9e3",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.277655",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.277664",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/leaky_relu_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.277679",
+      "updated_at": "2025-12-22T11:54:47.277682"
+    },
+    "c218dd8e-e219-4fc0-ba49-58338e67f263": {
+      "op_name": "not_equal_",
+      "op_id": "c218dd8e-e219-4fc0-ba49-58338e67f263",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.287156",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.287165",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/not_equal_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.287179",
+      "updated_at": "2025-12-22T11:54:47.287181"
+    },
+    "068a8cb7-af77-4492-a98b-e64dfa204bbd": {
+      "op_name": "le_",
+      "op_id": "068a8cb7-af77-4492-a98b-e64dfa204bbd",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.295635",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.295644",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/le_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.295659",
+      "updated_at": "2025-12-22T11:54:47.295662"
+    },
+    "9914a7a7-db73-4681-8b17-04303a2d2208": {
+      "op_name": "ne_",
+      "op_id": "9914a7a7-db73-4681-8b17-04303a2d2208",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.304459",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.304468",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/ne_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.304483",
+      "updated_at": "2025-12-22T11:54:47.304485"
+    },
+    "caf698fd-9423-46ed-9cd9-63dded731d8b": {
+      "op_name": "xlogy_",
+      "op_id": "caf698fd-9423-46ed-9cd9-63dded731d8b",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.313377",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.313386",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/xlogy_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.313401",
+      "updated_at": "2025-12-22T11:54:47.313403"
+    },
+    "b06fcb6f-643f-4769-ab43-0465e273e689": {
+      "op_name": "greater_",
+      "op_id": "b06fcb6f-643f-4769-ab43-0465e273e689",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.321796",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.321805",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/greater_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.321820",
+      "updated_at": "2025-12-22T11:54:47.321822"
+    },
+    "37b27223-d345-4d84-a540-b3e027a7a396": {
+      "op_name": "addcmul_",
+      "op_id": "37b27223-d345-4d84-a540-b3e027a7a396",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.332706",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.332715",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/addcmul_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.332730",
+      "updated_at": "2025-12-22T11:54:47.332732"
+    },
+    "741aa30f-d042-4392-b5cc-496e23105434": {
+      "op_name": "less_",
+      "op_id": "741aa30f-d042-4392-b5cc-496e23105434",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.343229",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.343238",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/less_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.343252",
+      "updated_at": "2025-12-22T11:54:47.343255"
+    },
+    "b7b088df-f041-43cb-8d4f-4e4ad21ff083": {
+      "op_name": "multiply",
+      "op_id": "b7b088df-f041-43cb-8d4f-4e4ad21ff083",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.352974",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.352983",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/multiply.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.353001",
+      "updated_at": "2025-12-22T11:54:47.353003"
+    },
+    "f5d37e5d-b939-445d-98e1-9dc9f9bba5e0": {
+      "op_name": "xlogy",
+      "op_id": "f5d37e5d-b939-445d-98e1-9dc9f9bba5e0",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.362031",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.362041",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/xlogy.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.362056",
+      "updated_at": "2025-12-22T11:54:47.362059"
+    },
+    "1039f0e9-7b9e-4ae4-ab80-22296e727ab4": {
+      "op_name": "heaviside_",
+      "op_id": "1039f0e9-7b9e-4ae4-ab80-22296e727ab4",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.370456",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.370465",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/heaviside_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.370480",
+      "updated_at": "2025-12-22T11:54:47.370482"
+    },
+    "80c25504-31ed-45cb-9b2a-e92a39af0f85": {
+      "op_name": "leaky_relu",
+      "op_id": "80c25504-31ed-45cb-9b2a-e92a39af0f85",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.379158",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.379167",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/leaky_relu.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.379183",
+      "updated_at": "2025-12-22T11:54:47.379185"
+    },
+    "0ddd4bde-5a3c-4093-896d-22c112ee11e5": {
+      "op_name": "heaviside",
+      "op_id": "0ddd4bde-5a3c-4093-896d-22c112ee11e5",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.387635",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.387644",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/heaviside.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.387659",
+      "updated_at": "2025-12-22T11:54:47.387662"
+    },
+    "0b463cb0-83b4-439f-8896-60396e841aaa": {
+      "op_name": "scalar_tensor",
+      "op_id": "0b463cb0-83b4-439f-8896-60396e841aaa",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.396091",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.396100",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/scalar_tensor.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.396116",
+      "updated_at": "2025-12-22T11:54:47.396118"
+    },
+    "57c7ece9-8820-4a55-b0c1-35b1698da3e0": {
+      "op_name": "log2_",
+      "op_id": "57c7ece9-8820-4a55-b0c1-35b1698da3e0",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.405384",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.405393",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/log2_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.405408",
+      "updated_at": "2025-12-22T11:54:47.405411"
+    },
+    "ccd5b2e1-fc6c-4f17-9d6e-228f2ee3096c": {
+      "op_name": "deg2rad",
+      "op_id": "ccd5b2e1-fc6c-4f17-9d6e-228f2ee3096c",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.414893",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.414902",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/deg2rad.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.414917",
+      "updated_at": "2025-12-22T11:54:47.414919"
+    },
+    "3d8c0114-80a3-4f04-bee3-225bd62d2608": {
+      "op_name": "empty_permuted",
+      "op_id": "3d8c0114-80a3-4f04-bee3-225bd62d2608",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.424275",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.424285",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/empty_permuted.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.424300",
+      "updated_at": "2025-12-22T11:54:47.424303"
+    },
+    "46125fab-19bb-48d8-8dce-40e503436ea4": {
+      "op_name": "square",
+      "op_id": "46125fab-19bb-48d8-8dce-40e503436ea4",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.433502",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.433511",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/square.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.433526",
+      "updated_at": "2025-12-22T11:54:47.433529"
+    },
+    "e6e45f59-7b0c-45b9-a906-8fcdb38f06f4": {
+      "op_name": "negative_",
+      "op_id": "e6e45f59-7b0c-45b9-a906-8fcdb38f06f4",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.443782",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.443791",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/negative_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.443806",
+      "updated_at": "2025-12-22T11:54:47.443809"
+    },
+    "a2782ee1-9938-4f2e-a1e5-0e6718e79dfe": {
+      "op_name": "new_ones",
+      "op_id": "a2782ee1-9938-4f2e-a1e5-0e6718e79dfe",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.454135",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.454144",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/new_ones.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.454160",
+      "updated_at": "2025-12-22T11:54:47.454163"
+    },
+    "630ae373-d960-4db0-90e3-2e0c1927d1d9": {
+      "op_name": "hardshrink",
+      "op_id": "630ae373-d960-4db0-90e3-2e0c1927d1d9",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.464206",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.464215",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/hardshrink.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.464231",
+      "updated_at": "2025-12-22T11:54:47.464233"
+    },
+    "34bbb404-45ef-47cc-acfb-487caae3cb64": {
+      "op_name": "arctanh",
+      "op_id": "34bbb404-45ef-47cc-acfb-487caae3cb64",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.473501",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.473510",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/arctanh.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.473526",
+      "updated_at": "2025-12-22T11:54:47.473528"
+    },
+    "3dcb40ed-409a-4b0b-8f88-32d2c3b5ce42": {
+      "op_name": "erfinv",
+      "op_id": "3dcb40ed-409a-4b0b-8f88-32d2c3b5ce42",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.482884",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.482894",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/erfinv.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.482909",
+      "updated_at": "2025-12-22T11:54:47.482911"
+    },
+    "13645535-ad0c-47e0-ba1c-f9f3de35b5bc": {
+      "op_name": "less_equal_",
+      "op_id": "13645535-ad0c-47e0-ba1c-f9f3de35b5bc",
+      "category": "pointwise",
+      "status": "EXPERIMENTAL",
+      "generation_info": {
+        "generator_tool": "auto_codegen",
+        "generator_version": "unknown",
+        "source_template": null,
+        "generation_date": "2025-12-22T11:54:47.492358",
+        "generation_config": {}
+      },
+      "validation_info": {
+        "accuracy_passed": true,
+        "test_cases_total": 1,
+        "test_cases_passed": 1,
+        "last_run": "2025-12-22T11:54:47.492367",
+        "coverage": {}
+      },
+      "performance_baselines": [],
+      "code_location": {
+        "file_path": "src/flag_gems/experimental/generated/pointwise/less_equal_.py",
+        "line_start": null,
+        "line_end": null,
+        "commit_hash": null
+      },
+      "hardware_support": {},
+      "graduation_tracking": {},
+      "created_at": "2025-12-22T11:54:47.492382",
+      "updated_at": "2025-12-22T11:54:47.492385"
     }
   }
 }
