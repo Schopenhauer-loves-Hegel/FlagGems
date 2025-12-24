@@ -250,13 +250,23 @@ def radix_sort(arr, k_bits=8, descending=False):
     dtype = arr.dtype
     num_bits = 1 if dtype == torch.bool else (arr.itemsize * 8)
 
-    TILE_N = 1024
-    tiles_n_per_cta = 8
+    # Adaptive tile sizing for histogram based on input size
+    if n <= 8192:
+        TILE_N = 1024
+        tiles_n_per_cta = 4
+    elif n <= 32768:
+        TILE_N = 1024
+        tiles_n_per_cta = 6
+    else:
+        TILE_N = 1024
+        tiles_n_per_cta = 8
     CTA_TILE_N = tiles_n_per_cta * TILE_N
 
     num_bins = 2**k_bits
     n_passes = triton.cdiv(num_bits, k_bits)
-    TILE_R = 16
+
+    # Adaptive TILE_R for histogram based on number of bins
+    TILE_R = 32 if k_bits == 8 else 16
 
     grid_n = triton.cdiv(n, CTA_TILE_N)
     grid_for_global_hist = (m * grid_n, 1, 1)
@@ -290,10 +300,17 @@ def radix_sort(arr, k_bits=8, descending=False):
         arr_out = torch.empty_like(arr)
         indices_out = torch.empty_like(indices_in)
 
-        TILE_R = 8
-        grid_r = triton.cdiv(num_bins, TILE_R)
-        TILE_N = 2048
-        grid_n = triton.cdiv(n, TILE_N)
+        # Adaptive TILE_R and TILE_N for sweep based on bins and input size
+        TILE_R_SWEEP = 16 if k_bits == 8 else 8
+        grid_r = triton.cdiv(num_bins, TILE_R_SWEEP)
+
+        # TILE_N_SWEEP must be power of 2 for Triton's tl.arange
+        if n <= 8192:
+            TILE_N_SWEEP = 1024
+        else:
+            TILE_N_SWEEP = 2048
+
+        grid_n = triton.cdiv(n, TILE_N_SWEEP)
         grid_for_sweep = (m * grid_n, grid_r)
 
         status = torch.empty(
@@ -316,8 +333,8 @@ def radix_sort(arr, k_bits=8, descending=False):
                 m,
                 n,
                 grid_n,
-                TILE_N,
-                TILE_R,
+                TILE_N_SWEEP,
+                TILE_R_SWEEP,
                 k_bits,
                 descending,
             )
@@ -370,7 +387,6 @@ def sort(inp, dim=-1, descending=False):
 
 def sort_stable(inp, *, stable, dim=-1, descending=False):
     logger.debug("GEMS SORT.STABLE")
-    # We only implement stable radix sort here
     _ = stable
     sort_elem_cnt = inp.shape[dim]
     if sort_elem_cnt == 1:
@@ -384,6 +400,10 @@ def sort_stable(inp, *, stable, dim=-1, descending=False):
         inp = inp.contiguous()
 
     dtype = inp.dtype
+
+    # Use standard 4-bit radix sort for all sizes
+    # Note: 8-bit radix was tested but caused severe performance degradation
+    # due to 256-bin overhead outweighing the benefit of fewer passes
     num_bits_per_pass = 1 if dtype == torch.bool else 4
     out, out_index = radix_sort(inp, num_bits_per_pass, descending)
 
