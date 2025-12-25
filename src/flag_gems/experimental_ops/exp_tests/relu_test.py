@@ -27,6 +27,7 @@ def relu(input: torch.Tensor) -> torch.Tensor:
     # For integer tensors, use clamp_min to emulate ReLU
     return torch.clamp_min(input, 0)
 
+
 import pytest
 import triton
 
@@ -58,7 +59,7 @@ def test_relu_performance(shape, dtype):
     input = torch.randn(shape, dtype=dtype, device=flag_gems.device)
 
     # cast to reference dtype if necessary
-    ref_input = input.cpu()
+    ref_input = input.clone()
 
     ms_torch, _, _ = triton.testing.do_bench(lambda: relu(ref_input), rep=100, quantiles=quantiles)
     ms_triton, _, _ = triton.testing.do_bench(lambda: gems_relu(input), rep=100, quantiles=quantiles)
