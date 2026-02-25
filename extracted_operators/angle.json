@@ -1,0 +1,17 @@
+{
+    "query": "操作符名字是 angle，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "angle",
+    "func_desc": "The angle operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\nimport math\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.utils import pointwise_dynamic, tl_extra_shim\n\natan2 = tl_extra_shim.atan2\n\nlogger = logging.getLogger(__name__)\n\n\n@pointwise_dynamic(is_tensor=[True, True], promotion_methods=[(0, \"DEFAULT\")])\n@triton.jit\ndef angle_func(real, imag):\n    real_last, imag_last = (\n        (real.to(tl.float32), imag.to(tl.float32))\n        if real.dtype == tl.float16\n        else (real, imag)\n    )\n    result = atan2(imag_last, real_last)\n    return result\n\n\n@pointwise_dynamic(is_tensor=[True], promotion_methods=[(0, \"INT_TO_FLOAT\")])\n@triton.jit\ndef angle_float_and_int(real):\n    zero = 0.0\n    pi = math.pi\n    real_positive = real >= zero\n    result = tl.where(real_positive, zero, pi)\n    return result\n\n\ndef angle(input_tensor: torch.Tensor) -> torch.Tensor:\n    logger.debug(\"GEMS ANGLE\")\n    if input_tensor.dtype == torch.complex32 or input_tensor.dtype == torch.complex64:\n        real = input_tensor.real\n        imag = input_tensor.imag\n        return angle_func(real, imag)\n    else:\n        real = input_tensor\n        return angle_float_and_int(real)",
+    "torch_kernel_code": "import torch\n\ndef angle(*args, **kwargs):\n    # TODO: Implement torch version\n    return torch.angle(*args, **kwargs)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"angle\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_angle(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.angle(ref_x)\n    res_out = bench.triton.angle(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

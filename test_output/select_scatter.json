@@ -1,0 +1,38 @@
+{
+    "query": "操作符名字是 select_scatter，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "select_scatter",
+    "func_desc": "The select_scatter operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "src",
+            "type": "Any",
+            "desc": "Parameter src"
+        },
+        {
+            "name": "dim",
+            "type": "int",
+            "desc": "Parameter dim"
+        },
+        {
+            "name": "index",
+            "type": "torch.Tensor",
+            "desc": "Parameter index"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\n\nfrom ..ops.copy import copy\nfrom ..utils.shape_utils import has_internal_overlapping\n\n\ndef select_scatter(inp, src, dim, index):\n    assert dim >= -inp.ndim and dim < inp.ndim, \"Invalid dim\"\n    assert index >= -inp.size(dim) and index < inp.size(dim), \"Invalid index\"\n    dim = dim % inp.ndim\n    index = index % inp.size(dim)\n\n    valid_shape = list(inp.shape)\n    del valid_shape[dim]\n    assert (\n        list(src.shape) == valid_shape\n    ), \"Expected src to have a size equal to the slice of self\"\n\n    if has_internal_overlapping(inp):\n        out = torch.empty(inp.size(), dtype=inp.dtype, device=inp.device)\n    else:\n        out = torch.empty_strided(\n            inp.size(), inp.stride(), dtype=inp.dtype, device=inp.device\n        )\n\n    copy(inp, out0=out)\n    indices = [slice(None)] * inp.ndim\n    indices[dim] = index\n    copy(src, out0=out[indices])\n\n    return out",
+    "torch_kernel_code": "import torch\n\ndef select_scatter(inp, src, dim, index):\n    return torch.select_scatter(inp, src, dim, index)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"select_scatter\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_select_scatter(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.select_scatter(ref_x)\n    res_out = bench.triton.select_scatter(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

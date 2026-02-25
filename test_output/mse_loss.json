@@ -1,0 +1,33 @@
+{
+    "query": "操作符名字是 mse_loss，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "mse_loss",
+    "func_desc": "The mse_loss operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "target",
+            "type": "Any",
+            "desc": "Parameter target"
+        },
+        {
+            "name": "reduction",
+            "type": "float",
+            "desc": "Parameter reduction"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\nimport math\nfrom enum import Enum\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom ..runtime import torch_device_fn\nfrom ..utils import libentry, pointwise_dynamic\nfrom ..utils import triton_lang_extension as tle\n\n\n@libentry()\n@triton.jit\ndef kernel_1(inp, target, mid, M, BLOCK_SIZE: tl.constexpr, reduction: tl.constexpr):\n    pid = tle.program_id(0)\n    offset = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    inp_ptrs = inp + offset\n    target_ptrs = target + offset\n    mask = offset < M\n\n    inp_val = tl.load(inp_ptrs, mask=mask, other=0).to(tl.float32)\n    target_val = tl.load(target_ptrs, mask=mask, other=0).to(tl.float32)\n    sub = inp_val - target_val\n    pow_val = sub * sub\n    # Reduction.MEAN.value: 1 Reduction.SUM.value: 2\n    if reduction == 1:\n        sum_val = tl.sum(pow_val) / M\n    else:\n        sum_val = tl.sum(pow_val)\n    mid_ptr = mid + pid\n    tl.store(mid_ptr, sum_val)\n\n\n@libentry()\n@triton.jit\ndef kernel_2(mid, out, mid_size, BLOCK_MID: tl.constexpr):\n    offset = tl.arange(0, BLOCK_MID)\n    mid_ptrs = mid + offset\n    mask = offset < mid_size\n    mid_val = tl.load(mid_ptrs, mask=mask, other=0).to(tl.float32)\n    sum_val = tl.sum(mid_val)\n    tl.store(out, sum_val)\n\n\n@pointwise_dynamic(is_tensor=[True, True], promotion_methods=[(0, \"DEFAULT\")])\n@triton.jit\ndef func(x, y):\n    return (x - y) * (x - y)\n\n\nclass Reduction(Enum):\n    NONE = 0\n    MEAN = 1\n    SUM = 2\n\n\ndef mse_loss(inp, target, reduction=Reduction.MEAN.value):\n    if reduction == Reduction.NONE.value:\n        return func(inp, target)\n\n    inp = inp.contiguous()\n    target = target.contiguous()\n    M = inp.numel()\n    dtype = inp.dtype\n\n    block_size = triton.next_power_of_2(math.ceil(math.sqrt(M)))\n    mid_size = triton.cdiv(M, block_size)\n    block_mid = triton.next_power_of_2(mid_size)\n\n    mid = torch.empty((mid_size,), dtype=torch.float32, device=inp.device)\n    out = torch.empty([], dtype=dtype, device=inp.device)\n\n    with torch_device_fn.device(inp.device):\n        kernel_1[(mid_size, 1, 1)](inp, target, mid, M, block_size, reduction)\n        kernel_2[(1, 1, 1)](mid, out, mid_size, block_mid)\n    return out",
+    "torch_kernel_code": "import torch\n\ndef mse_loss(inp, target, reduction=Reduction.MEAN.value):\n    return torch.mse_loss(inp, target, reduction=reduction)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"mse_loss\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_mse_loss(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.mse_loss(ref_x)\n    res_out = bench.triton.mse_loss(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

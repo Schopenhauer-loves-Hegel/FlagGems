@@ -1,0 +1,38 @@
+{
+    "query": "操作符名字是 diag_embed，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "diag_embed",
+    "func_desc": "The diag_embed operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "x",
+            "type": "torch.Tensor",
+            "desc": "Parameter x"
+        },
+        {
+            "name": "offset",
+            "type": "int",
+            "desc": "Parameter offset"
+        },
+        {
+            "name": "dim1",
+            "type": "int",
+            "desc": "Parameter dim1"
+        },
+        {
+            "name": "dim2",
+            "type": "int",
+            "desc": "Parameter dim2"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\n\nfrom ..utils import pointwise_dynamic\n\n\n@pointwise_dynamic(is_tensor=[True], promotion_methods=[(0, \"DEFAULT\")])\n@triton.jit\ndef copy_func(x):\n    return x\n\n\ndef diag_embed(x, offset=0, dim1=-2, dim2=-1):\n\n    rank = x.ndim + 1\n\n    assert dim1 >= -rank and dim1 < rank, f\"Invalid dim1: {dim1}\"\n    assert dim2 >= -rank and dim2 < rank, f\"Invalid dim2: {dim2}\"\n    # convert from negative dims\n    dim1 = dim1 % rank\n    dim2 = dim2 % rank\n\n    assert dim1 != dim2, \"diagonal dimensions cannot be identical\"\n\n    # as per the docs, exchanging dims is equivalent to changing the sign of\n    # offset\n    if dim1 > dim2:\n        offset = -offset\n        dim1, dim2 = dim2, dim1\n\n    # as per the docs, the size of last dim is placed at dim1 and dim2\n    last_dim = x.size(-1) + abs(offset)\n\n    y_shape = list(x.shape)\n    y_shape.pop()\n    y_shape.insert(dim1, last_dim)\n    y_shape.insert(dim2, last_dim)\n\n    y = torch.zeros(y_shape, dtype=x.dtype, device=x.device)\n    y_diagonal_view = torch.diagonal(y, offset, dim1, dim2)\n    copy_func.instantiate(x.ndim)(x, out0=y_diagonal_view)\n\n    return y",
+    "torch_kernel_code": "import torch\n\ndef diag_embed(x, offset=0, dim1=-2, dim2=-1):\n    return torch.diag_embed(x, offset=offset, dim1=dim1, dim2=dim2)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"diag_embed\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_diag_embed(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.diag_embed(ref_x)\n    res_out = bench.triton.diag_embed(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

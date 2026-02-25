@@ -1,0 +1,17 @@
+{
+    "query": "操作符名字是 hstack，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "hstack",
+    "func_desc": "The hstack operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import itertools\nimport logging\nfrom typing import List, Tuple, Union\n\nimport torch\nimport triton\n\nfrom ..utils import pointwise_dynamic\nfrom ..utils.tensor_wrapper import StridedBuffer\n\n\n@pointwise_dynamic(is_tensor=[True], promotion_methods=[(0, \"DEFAULT\")])\n@triton.jit\ndef copy_func(x):\n    return x\n\n\ndef hstack(\n    tensors: Union[Tuple[torch.Tensor, ...], List[torch.Tensor]]\n) -> torch.Tensor:\n\n    if len(tensors) == 0:\n        raise RuntimeError(\"hstack expected a non-empty TensorList\")\n\n    if tensors[0].ndim == 0:\n        tensors[0] = tensors[0].view(1)\n    inp0_shape = tensors[0].shape\n    out_shape = list(inp0_shape)\n    inp_shapes = [inp0_shape]\n\n    if len(inp0_shape) == 1:\n        dim = 0\n    else:\n        dim = 1\n\n    for tensor_num, tensor in enumerate(tensors[1:]):\n        if tensor.ndim == 0:\n            tensor = tensor.view(1)\n        if tensor.ndim != tensors[0].ndim:\n            raise RuntimeError(\n                f\"Tensors must have same number of dimensions: got {tensors[0].ndim} and {tensor.ndim}\"\n            )\n\n        inp_shape = tensor.shape\n        inp_shapes.append(inp_shape)\n\n        for i in range(len(inp_shape)):\n            if i != dim and inp_shape[i] != inp0_shape[i]:\n                raise RuntimeError(\n                    f\"Sizes of tensors must match except in dimension {dim}. \\\n                        Expected size {inp0_shape[i]} but got size {inp_shape[i]} \\\n                        for tensor number {tensor_num + 1} in the list.\"\n                )\n\n    out_shape[dim] = sum(s[dim] for s in inp_shapes)\n\n    out0 = torch.empty(out_shape, dtype=tensors[0].dtype, device=tensors[0].device)\n    out0_strides = out0.stride()\n    out0_offsets = list(\n        itertools.accumulate(\n            [s[dim] * out0_strides[dim] for s in inp_shapes[:-1]], initial=0\n        )\n    )\n\n    for a, out0_offset in zip(tensors, out0_offsets):\n        in_view = StridedBuffer(a, a.shape, a.stride())\n        out_view = StridedBuffer(out0, a.shape, out0.stride(), offset=out0_offset)\n        copy_func.instantiate(a.ndim)(in_view, out0=out_view)\n\n    return out0",
+    "torch_kernel_code": "import torch\n\ndef hstack(*args, **kwargs):\n    # TODO: Implement torch version\n    return torch.hstack(*args, **kwargs)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"hstack\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_hstack(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.hstack(ref_x)\n    res_out = bench.triton.hstack(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

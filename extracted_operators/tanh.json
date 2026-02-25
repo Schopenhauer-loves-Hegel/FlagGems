@@ -1,0 +1,23 @@
+{
+    "query": "操作符名字是 tanh，是一个 pointwise 算子，处理硬件是 Nvidia。",
+    "kernel_name": "tanh",
+    "func_desc": "The tanh operator",
+    "func_type": "pointwise",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "self",
+            "type": "Any",
+            "desc": "Parameter self"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.utils import pointwise_dynamic, tl_extra_shim\n\npow = tl_extra_shim.pow\n_tanh = tl_extra_shim.tanh\nlogger = logging.getLogger(__name__)\n\n\n@pointwise_dynamic(promotion_methods=[(0, \"INT_TO_FLOAT\")])\n@triton.jit\ndef tanh_kernel(x):\n    return _tanh(x.to(tl.float32))\n\n\n@pointwise_dynamic(promotion_methods=[(0, \"INT_TO_FLOAT\")])\n@triton.jit\ndef tanh_backward_kernel(y, dy):\n    y = y.to(tl.float32)\n    return dy.to(tl.float32) * (1.0 - y * y)\n\n\ndef tanh(self):\n    logger.debug(\"GEMS TANH FORWARD\")\n    out = tanh_kernel(self)\n    return out\n\n\ndef tanh_backward(grad_output, output):\n    logger.debug(\"GEMS TANH BACKWARD\")\n    in_grad = tanh_backward_kernel(output, grad_output)\n    return in_grad\n\n\ndef tanh_(A):\n    logger.debug(\"GEMS TANH_ FORWARD\")\n    out = tanh_kernel(A, out0=A)\n    return out",
+    "torch_kernel_code": "import torch\n\ndef tanh(self):\n    return torch.tanh(self)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"tanh\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_tanh(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.tanh(ref_x)\n    res_out = bench.triton.tanh(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

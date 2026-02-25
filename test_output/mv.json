@@ -1,0 +1,28 @@
+{
+    "query": "操作符名字是 mv，是一个 blas 算子，处理硬件是 Nvidia。",
+    "kernel_name": "mv",
+    "func_desc": "The mv operator",
+    "func_type": "blas",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "vec",
+            "type": "Any",
+            "desc": "Parameter vec"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom .. import runtime\nfrom ..runtime import torch_device_fn\nfrom ..utils import libentry\nfrom ..utils import triton_lang_extension as tle\n\n\n@libentry()\n@triton.autotune(\n    configs=runtime.get_tuned_config(\"mv\"),\n    key=[\"M\", \"N\"],\n)\n@triton.jit\ndef mv_kernel(\n    A,\n    B,\n    C,\n    N,\n    M,\n    stride_an,\n    stride_am,\n    stride_bm,\n    stride_cn,\n    BLOCK_N: tl.constexpr,\n    BLOCK_M: tl.constexpr,\n):\n    pid = tle.program_id(0)\n    offset_n = pid * BLOCK_N + tl.arange(0, BLOCK_N)[:, None]\n    offset_m = tl.arange(0, BLOCK_M)[None, :]\n    n_mask = offset_n < N\n    A_ptrs = A + offset_n * stride_an + offset_m * stride_am\n    B_ptrs = B + offset_m * stride_bm\n    acc = tl.zeros((BLOCK_N, BLOCK_M), dtype=tl.float32)\n    for m in range(0, M, BLOCK_M):\n        m_mask = m + offset_m < M\n        a = tl.load(A_ptrs, mask=n_mask & m_mask, other=0.0).to(tl.float32)\n        b = tl.load(B_ptrs, mask=m_mask, other=0.0).to(tl.float32)\n        acc += a * b\n        A_ptrs += BLOCK_M * stride_am\n        B_ptrs += BLOCK_M * stride_bm\n\n    acc = tl.sum(acc, axis=1)\n    C_ptrs = C + offset_n * stride_cn\n    tl.store(C_ptrs, acc[:, None], mask=n_mask)\n\n\ndef mv(inp, vec):\n    assert inp.shape[1] == vec.shape[0], \"incompatible dimensions\"\n    N, M = inp.shape\n    out = torch.empty((N,), device=inp.device, dtype=inp.dtype)\n    grid = lambda META: (triton.cdiv(N, META[\"BLOCK_N\"]),)\n    with torch_device_fn.device(inp.device):\n        mv_kernel[grid](\n            inp,\n            vec,\n            out,\n            N,\n            M,\n            inp.stride(0),\n            inp.stride(1),\n            vec.stride(0),\n            out.stride(0),\n        )\n    return out",
+    "torch_kernel_code": "import torch\n\ndef mv(inp, vec):\n    return torch.mv(input, vec)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"mv\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_mv(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.mv(ref_x)\n    res_out = bench.triton.mv(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

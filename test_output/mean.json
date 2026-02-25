@@ -1,0 +1,28 @@
+{
+    "query": "操作符名字是 mean，是一个 reduction 算子，处理硬件是 Nvidia。",
+    "kernel_name": "mean",
+    "func_desc": "The mean operator",
+    "func_type": "reduction",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "dtype",
+            "type": "torch.Tensor",
+            "desc": "Parameter dtype"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\nimport math\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom .. import runtime\nfrom ..runtime import torch_device_fn\nfrom ..utils import dim_compress, libentry\nfrom ..utils import triton_lang_extension as tle\n\n\n@libentry()\n@triton.jit\ndef mean_kernel_1(\n    inp,\n    mid,\n    M,\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tle.program_id(0)\n    offset = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    inp_ptrs = inp + offset\n    mask = offset < M\n    inp_val = tl.load(inp_ptrs, mask=mask, other=0.0)\n    sum_val = tl.sum(inp_val, axis=0)\n    mid_ptr = mid + pid\n    tl.store(mid_ptr, sum_val)\n\n\n@libentry()\n@triton.jit\ndef mean_kernel_2(mid, out, M, MID_SIZE, BLOCK_MID: tl.constexpr):\n    offset = tl.arange(0, BLOCK_MID)\n    mid_ptrs = mid + offset\n    mask = offset < MID_SIZE\n    mid_val = tl.load(mid_ptrs, mask=mask, other=0.0)\n    sum_val = tl.sum(mid_val, axis=0) / M\n    tl.store(out, sum_val)\n\n\ndef mean(inp, *, dtype=None):\n    M = inp.numel()\n    if dtype is None:\n        dtype = inp.dtype\n    block_size = triton.next_power_of_2(math.ceil(math.sqrt(M)))\n    mid_size = triton.cdiv(M, block_size)\n    block_mid = triton.next_power_of_2(mid_size)\n\n    mid = torch.empty((mid_size,), dtype=dtype, device=inp.device)\n    out = torch.empty([], dtype=dtype, device=inp.device)\n\n    with torch_device_fn.device(inp.device):\n        mean_kernel_1[(mid_size, 1, 1)](inp, mid, M, block_size)\n        mean_kernel_2[(1, 1, 1)](mid, out, M, mid_size, block_mid)\n    return out\n\n\n@libentry()\n@triton.autotune(\n    configs=runtime.get_tuned_config(\"mean\"),\n    key=[\"M\", \"N\"],\n)\n@triton.jit\ndef mean_dim_kernel(X, Mean, M, N, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr):\n    # Map the program id to the row of X it should compute.\n    pid = tle.program_id(0) * BLOCK_M + tl.arange(0, BLOCK_M)[:, None]\n    X = X + pid * N\n    Mean = Mean + pid\n    row_mask = pid < M\n\n    # Compute mean\n    _mean = tl.zeros([BLOCK_M, BLOCK_N], dtype=tl.float32)\n    for off in range(0, N, BLOCK_N):\n        cols = off + tl.arange(0, BLOCK_N)[None, :]\n        col_mask = cols < N\n        mask = row_mask and col_mask\n\n        a = tl.load(X + cols, mask, other=0.0).to(tl.float32)\n        _mean += a\n    mean = tl.sum(_mean, axis=1) / N\n    mean = mean[:, None]\n    tl.store(Mean, mean, row_mask)\n\n\ndef mean_dim(x, dim, keepdim=False, *, dtype=None):\n\n    if dtype is None:\n        dtype = x.dtype\n    if dim is None:\n        out = mean(x, dtype=dtype)\n        if not keepdim:\n            out = out.reshape([1] * x.ndim)\n        return out\n\n    shape = list(x.shape)\n    dim = [d % x.ndim for d in dim]\n    x = dim_compress(x, dim)\n    N = 1\n    for i in dim:\n        N *= shape[i]\n        shape[i] = 1\n    M = x.numel() // N\n    out = torch.empty(shape, dtype=dtype, device=x.device)\n    grid = lambda META: (triton.cdiv(M, META[\"BLOCK_M\"]),)\n\n    with torch_device_fn.device(x.device):\n        mean_dim_kernel[grid](x, out, M, N)\n    if not keepdim:\n        out = out.squeeze(dim)\n    return out",
+    "torch_kernel_code": "import torch\n\ndef mean(inp, *, dtype=None):\n    return torch.mean(input, dim=dim, keepdim=keepdim)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"mean\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_mean(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.mean(ref_x)\n    res_out = bench.triton.mean(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

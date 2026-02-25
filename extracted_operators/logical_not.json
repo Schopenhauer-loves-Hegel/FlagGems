@@ -1,0 +1,23 @@
+{
+    "query": "操作符名字是 logical_not，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "logical_not",
+    "func_desc": "The logical_not operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "A",
+            "type": "Any",
+            "desc": "Parameter A"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.utils import pointwise_dynamic\n\nlogger = logging.getLogger(__name__)\n\n\n@pointwise_dynamic(promotion_methods=[(0, \"ALWAYS_BOOL\")])\n@triton.jit\ndef logical_not_func(x):\n    return not x.to(tl.int1)\n\n\ndef logical_not(A):\n    logger.debug(\"GEMS LOGICAL_NOT\")\n    return logical_not_func(A)",
+    "torch_kernel_code": "import torch\n\ndef logical_not(A):\n    return torch.logical_not(A)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"logical_not\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_logical_not(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.logical_not(ref_x)\n    res_out = bench.triton.logical_not(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

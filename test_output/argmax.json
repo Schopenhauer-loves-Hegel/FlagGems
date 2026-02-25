@@ -1,0 +1,38 @@
+{
+    "query": "操作符名字是 argmax，是一个 reduction 算子，处理硬件是 Nvidia。",
+    "kernel_name": "argmax",
+    "func_desc": "The argmax operator",
+    "func_type": "reduction",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "dim",
+            "type": "int",
+            "desc": "Parameter dim"
+        },
+        {
+            "name": "keepdim",
+            "type": "int",
+            "desc": "Parameter keepdim"
+        },
+        {
+            "name": "dtype",
+            "type": "torch.Tensor",
+            "desc": "Parameter dtype"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\nimport math\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom .. import runtime\nfrom ..runtime import torch_device_fn\nfrom ..utils import libentry\nfrom ..utils import triton_lang_extension as tle\n\n\n@libentry()\n@triton.jit\ndef argmax_kernel_1(\n    inp,\n    mid_value,\n    mid_index,\n    M,\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tle.program_id(0)\n    offset = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    inp_ptrs = inp + offset\n    mask = offset < M\n    inp_val = tl.load(inp_ptrs, mask=mask, other=-float(\"inf\"))\n    max_val, max_index = tl.max(inp_val, axis=0, return_indices=True)\n    max_index = max_index + pid * BLOCK_SIZE\n    mid_value_ptr = mid_value + pid\n    max_index_ptr = mid_index + pid\n    tl.store(mid_value_ptr, max_val)\n    tl.store(max_index_ptr, max_index)\n\n\n@libentry()\n@triton.jit\ndef argmax_kernel_2(mid_value, mid_index, out, mid_size, BLOCK_MID: tl.constexpr):\n    offset = tl.arange(0, BLOCK_MID)\n    mid_ptrs = mid_value + offset\n    mask = offset < mid_size\n    mid_val = tl.load(mid_ptrs, mask=mask, other=-float(\"inf\"))\n    index_val = tl.argmax(mid_val, axis=0)\n    mid_index_ptrs = mid_index + index_val\n    out_val = tl.load(mid_index_ptrs)\n    tl.store(out, out_val)\n\n\n@libentry()\n@triton.heuristics(runtime.get_heuristic_config(\"argmax\"))\n@triton.jit\ndef argmax_kernel(\n    inp,\n    out_index,\n    M,\n    N,\n    K,\n    BLOCK_M: tl.constexpr,\n    BLOCK_N: tl.constexpr,\n):\n    # set offset\n    pid_m = tle.program_id(0)\n    pid_k = tle.program_id(1)\n    m_offset = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)\n\n    max_values = tl.full([BLOCK_M], dtype=tl.float32, value=float(\"-inf\"))\n    argmax_values = tl.full([BLOCK_M], dtype=tl.int64, value=0)\n    for start_n in range(0, N, BLOCK_N):\n        n_offset = start_n + tl.arange(0, BLOCK_N)\n        offset = m_offset[:, None] * N * K + n_offset[None, :] * K + pid_k\n        mask = m_offset[:, None] < M and n_offset[None, :] < N\n        inp_ptrs = inp + offset\n        inp_vals = tl.load(inp_ptrs, mask=mask, other=-float(\"inf\")).to(tl.float32)\n        local_max, local_argmax = tl.max(\n            inp_vals, 1, return_indices=True, return_indices_tie_break_left=True\n        )\n        # if return indices is not supported, call a tl.argmax in addition\n        # local_argmax = tl.argmax(inp_vals, 1)\n        update = local_max > max_values\n        max_values = tl.where(update, local_max, max_values)\n        argmax_values = tl.where(update, start_n + local_argmax, argmax_values)\n\n    offset_index = m_offset * K + pid_k\n    out_index_ptrs = out_index + offset_index\n    mask1 = m_offset < M\n    tl.store(out_index_ptrs, argmax_values, mask=mask1)\n\n\ndef argmax(inp, dim=None, keepdim=False, *, dtype=None):\n    if dim is None:\n        M = inp.numel()\n        if dtype is None:\n            dtype = inp.dtype\n        block_size = triton.next_power_of_2(math.ceil(math.sqrt(M)))\n        mid_size = triton.cdiv(M, block_size)\n        block_mid = triton.next_power_of_2(mid_size)\n\n        mid_value = torch.empty((mid_size,), dtype=dtype, device=inp.device)\n        mid_index = torch.empty((mid_size,), dtype=torch.int64, device=inp.device)\n        if keepdim:\n            shape = list(inp.shape)\n            for i in range(0, inp.dim()):\n                shape[i] = 1\n            out = torch.empty(shape, dtype=torch.int64, device=inp.device)\n        else:\n            out = torch.empty([], dtype=torch.int64, device=inp.device)\n\n        with torch_device_fn.device(inp.device):\n            argmax_kernel_1[(mid_size, 1, 1)](\n                inp,\n                mid_value,\n                mid_index,\n                M,\n                block_size,\n            )\n            argmax_kernel_2[(1, 1, 1)](mid_value, mid_index, out, mid_size, block_mid)\n        return out\n    else:\n        assert dim >= -inp.ndim and dim < inp.ndim, \"Invalid dim\"\n        shape = inp.shape\n        dim = dim % inp.ndim\n        N = shape[dim]\n        M = math.prod(shape[:dim])\n        K = inp.numel() // M // N\n\n        inp = inp.contiguous()\n\n        shape_list = list(shape)\n        shape_list[dim] = 1\n        out_index = torch.empty(shape_list, dtype=torch.int64, device=inp.device)\n        if not keepdim:\n            out_index = torch.squeeze(out_index, dim)\n\n        grid = lambda meta: (\n            triton.cdiv(M, meta[\"BLOCK_M\"]),\n            K,\n        )\n        with torch_device_fn.device(inp.device):\n            argmax_kernel[grid](\n                inp,\n                out_index,\n                M,\n                N,\n                K,\n            )\n\n        return out_index",
+    "torch_kernel_code": "import torch\n\ndef argmax(inp, dim=None, keepdim=False, *, dtype=None):\n    return torch.argmax(input, dim=dim, keepdim=keepdim)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"argmax\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_argmax(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.argmax(ref_x)\n    res_out = bench.triton.argmax(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

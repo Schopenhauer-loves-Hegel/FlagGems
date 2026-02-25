@@ -1,0 +1,23 @@
+{
+    "query": "操作符名字是 resolve_neg，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "resolve_neg",
+    "func_desc": "The resolve_neg operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "A: torch.Tensor",
+            "type": "torch.Tensor",
+            "desc": "Parameter A: torch.Tensor"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\n\nfrom flag_gems.ops.neg import neg_func\n\n\ndef resolve_neg(A: torch.Tensor):\n    return neg_func(A) if A.is_neg() else A",
+    "torch_kernel_code": "import torch\n\ndef resolve_neg(A: torch.Tensor):\n    return torch.resolve_neg(A: torch.Tensor)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"resolve_neg\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_resolve_neg(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.resolve_neg(ref_x)\n    res_out = bench.triton.resolve_neg(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

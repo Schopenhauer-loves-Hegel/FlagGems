@@ -1,0 +1,33 @@
+{
+    "query": "操作符名字是 sub，是一个 pointwise 算子，处理硬件是 Nvidia。",
+    "kernel_name": "sub",
+    "func_desc": "The sub operator",
+    "func_type": "pointwise",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "A",
+            "type": "Any",
+            "desc": "Parameter A"
+        },
+        {
+            "name": "B",
+            "type": "Any",
+            "desc": "Parameter B"
+        },
+        {
+            "name": "alpha",
+            "type": "float",
+            "desc": "Parameter alpha"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\n\nfrom flag_gems.utils import pointwise_dynamic\n\nlogger = logging.getLogger(__name__)\n\n\n@pointwise_dynamic(is_tensor=[True, True, False], promotion_methods=[(0, 1, \"DEFAULT\")])\n@triton.jit\ndef sub_func(x, y, alpha):\n    return x - y * alpha\n\n\n@pointwise_dynamic(\n    is_tensor=[True, False, False], promotion_methods=[(0, 1, \"DEFAULT\")]\n)\n@triton.jit\ndef sub_func_tensor_scalar(x, y, alpha):\n    return x - y * alpha\n\n\n@pointwise_dynamic(\n    is_tensor=[False, True, False], promotion_methods=[(0, 1, \"DEFAULT\")]\n)\n@triton.jit\ndef sub_func_scalar_tensor(x, y, alpha):\n    return x - y * alpha\n\n\ndef sub(A, B, *, alpha=1):\n    logger.debug(\"GEMS SUB\")\n    if isinstance(A, torch.Tensor) and isinstance(B, torch.Tensor):\n        return sub_func(A, B, alpha)\n    elif isinstance(A, torch.Tensor):\n        return sub_func_tensor_scalar(A, B, alpha)\n    elif isinstance(B, torch.Tensor):\n        return sub_func_scalar_tensor(A, B, alpha)\n    else:\n        # Both scalar\n        return torch.tensor(A - B * alpha)\n\n\ndef sub_(A, B, *, alpha=1):\n    logger.debug(\"GEMS SUB_\")\n    if isinstance(B, torch.Tensor):\n        return sub_func(A, B, alpha, out0=A)\n    else:\n        return sub_func_tensor_scalar(A, B, alpha, out0=A)",
+    "torch_kernel_code": "import torch\n\ndef sub(A, B, *, alpha=1):\n    return torch.sub(A, B, alpha=alpha)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"sub\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_sub(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.sub(ref_x)\n    res_out = bench.triton.sub(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

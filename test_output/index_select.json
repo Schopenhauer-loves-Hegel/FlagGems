@@ -1,0 +1,33 @@
+{
+    "query": "操作符名字是 index_select，是一个 indexing 算子，处理硬件是 Nvidia。",
+    "kernel_name": "index_select",
+    "func_desc": "The index_select operator",
+    "func_type": "indexing",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "dim",
+            "type": "int",
+            "desc": "Parameter dim"
+        },
+        {
+            "name": "index",
+            "type": "torch.Tensor",
+            "desc": "Parameter index"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom .. import runtime\nfrom ..utils import dim_compress, libentry\nfrom ..utils import triton_lang_extension as tle\n\n\n@libentry()\n@triton.heuristics(runtime.get_heuristic_config(\"index_select\"))\n@triton.jit\ndef index_select_kernel(\n    inp, out, M, N, index, index_len, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr\n):\n    pid_x = tle.program_id(axis=0)\n    pid_y = tle.program_id(axis=1)\n    rows_offsets = pid_x * BLOCK_M + tl.arange(0, BLOCK_M)[:, None]\n    rows_mask = rows_offsets < M\n    cols_offsets = pid_y * BLOCK_N + tl.arange(0, BLOCK_N)\n\n    out_mask = rows_mask and (cols_offsets < index_len)\n\n    indices = tl.load(index + cols_offsets, mask=(cols_offsets < index_len), other=0)\n    inp_off = rows_offsets * N + indices[None, :]\n    out_off = rows_offsets * index_len + cols_offsets[None, :]\n\n    selected = tl.load(inp + inp_off, mask=rows_mask, other=0.0)\n    tl.store(out + out_off, selected, mask=out_mask)\n\n\ndef index_select(inp, dim, index):\n    assert dim >= -inp.ndim and dim < inp.ndim, \"Invalid dim\"\n    assert index.ndim <= 1, \"Index should have dimension 1 or 0\"\n    assert ((i >= 0 and i < inp.size(dim)) for i in index), \"Index out of range\"\n\n    if index.ndim == 0:\n        index = index.unsqueeze(0)\n    dim = dim % inp.ndim\n    inp_shape = list(inp.shape)\n    index_len = index.numel()\n\n    # with dim_compress\n    inp = dim_compress(inp, dim)\n    N = inp_shape[dim]\n    M = inp.numel() // N\n    out_shape = list(inp.shape)\n    out_shape[inp.ndim - 1] = index_len\n    out = torch.empty(out_shape, dtype=inp.dtype, device=inp.device)\n\n    grid = lambda meta: (\n        triton.cdiv(M, meta[\"BLOCK_M\"]),\n        triton.cdiv(index_len, meta[\"BLOCK_N\"]),\n    )\n    index_select_kernel[grid](inp, out, M, N, index, index_len)\n    if dim != out.ndim - 1:\n        order = [i for i in range(out.ndim - 1)]\n        order.insert(dim, out.ndim - 1)\n        return out.permute(order).contiguous()\n    else:\n        return out",
+    "torch_kernel_code": "import torch\n\ndef index_select(inp, dim, index):\n    return torch.index_select(input, dim, index)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"index_select\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_index_select(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.index_select(ref_x)\n    res_out = bench.triton.index_select(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

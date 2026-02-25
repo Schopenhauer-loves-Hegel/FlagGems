@@ -1,0 +1,28 @@
+{
+    "query": "操作符名字是 bmm，是一个 blas 算子，处理硬件是 Nvidia。",
+    "kernel_name": "bmm",
+    "func_desc": "The bmm operator",
+    "func_type": "blas",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "A",
+            "type": "Any",
+            "desc": "Parameter A"
+        },
+        {
+            "name": "B",
+            "type": "Any",
+            "desc": "Parameter B"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom .. import runtime\nfrom ..runtime import torch_device_fn\nfrom ..utils import libentry\nfrom ..utils import triton_lang_extension as tle\n\n\n@libentry()\n@triton.autotune(\n    configs=runtime.get_tuned_config(\"bmm\"),\n    key=[\"M\", \"N\", \"K\"],\n)\n@triton.heuristics(runtime.get_heuristic_config(\"bmm\"))\n@triton.jit\ndef bmm_kernel(\n    A,\n    B,\n    O,\n    M,\n    N,\n    K,\n    TILE_M: tl.constexpr,\n    TILE_N: tl.constexpr,\n    TILE_K: tl.constexpr,\n    GROUP_M: tl.constexpr,\n    DIVISIBLE_M: tl.constexpr,\n    DIVISIBLE_N: tl.constexpr,\n    DIVISIBLE_K: tl.constexpr,\n):\n    # batch offsets\n    pid_b = tle.program_id(2)\n    A += pid_b * M * K\n    B += pid_b * K * N\n    O += pid_b * M * N\n\n    pidx = tle.program_id(0)\n    pidy = tle.program_id(1)\n\n    if GROUP_M == 1:\n        pid_m, pid_n = pidx, pidy\n    else:\n        # reorder CTAs\n        gridx = tle.num_programs(0)\n        gridy = tle.num_programs(1)\n        pid = pidx + pidy * gridx\n\n        num_CTA_per_group = gridy * GROUP_M\n\n        group_id = pid // num_CTA_per_group\n        inner_group_id = pid % num_CTA_per_group\n        GROUP_SIZE = tl.where(\n            (group_id * GROUP_M + GROUP_M) > gridx, gridx % GROUP_M, GROUP_M\n        )\n        pid_m = group_id * GROUP_M + inner_group_id % GROUP_SIZE\n        pid_n = inner_group_id // GROUP_SIZE\n\n    offs_m = pid_m * TILE_M + tl.arange(0, TILE_M)\n    offs_n = pid_n * TILE_N + tl.arange(0, TILE_N)\n    offs_k = tl.arange(0, TILE_K)\n\n    if not DIVISIBLE_M:\n        mask_m = offs_m < M\n    if not DIVISIBLE_N:\n        mask_n = offs_n < N\n\n    a_ptrs = A + offs_m[:, None] * K + offs_k[None, :]\n    b_ptrs = B + offs_k[:, None] * N + offs_n[None, :]\n    o_ptrs = O + offs_m[:, None] * N + offs_n[None, :]\n\n    num_iters = tl.cdiv(K, TILE_K)\n    o = tl.zeros((TILE_M, TILE_N), dtype=tl.float32)\n    for _ in range(num_iters):\n        if DIVISIBLE_K:\n            if DIVISIBLE_M:\n                mask_a = None\n            else:\n                mask_a = mask_m[:, None]\n            if DIVISIBLE_N:\n                mask_b = None\n            else:\n                mask_b = mask_n[None, :]\n        else:\n            mask_k = offs_k < K\n            if DIVISIBLE_M:\n                mask_a = mask_k[None, :]\n            else:\n                mask_a = mask_m[:, None] & mask_k[None, :]\n            if DIVISIBLE_N:\n                mask_b = mask_k[:, None]\n            else:\n                mask_b = mask_k[:, None] & mask_n[None, :]\n\n        a = tl.load(a_ptrs, mask_a)\n        b = tl.load(b_ptrs, mask_b)\n\n        offs_k += TILE_K\n        a_ptrs += TILE_K\n        b_ptrs += TILE_K * N\n\n        o += tl.dot(a, b, allow_tf32=False)\n\n    if DIVISIBLE_M and DIVISIBLE_N:\n        mask_c = None\n    elif DIVISIBLE_M and not DIVISIBLE_N:\n        mask_c = mask_n[None, :]\n    elif not DIVISIBLE_M and DIVISIBLE_N:\n        mask_c = mask_m[:, None]\n    else:\n        mask_c = mask_m[:, None] & mask_n[None, :]\n    tl.store(o_ptrs, o, mask_c)\n\n\ndef bmm(A, B):\n    batch, M, K = A.shape\n    _, _, N = B.shape\n    A = A.contiguous()\n    B = B.contiguous()\n    out = torch.empty((batch, M, N), dtype=A.dtype, device=A.device)\n\n    grid_fn = lambda meta: (\n        triton.cdiv(meta[\"M\"], meta[\"TILE_M\"]),\n        triton.cdiv(meta[\"N\"], meta[\"TILE_N\"]),\n        batch,\n    )\n    with torch_device_fn.device(A.device):\n        bmm_kernel[grid_fn](A, B, out, M, N, K)\n    return out",
+    "torch_kernel_code": "import torch\n\ndef bmm(A, B):\n    return torch.bmm(input, mat2)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"bmm\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_bmm(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.bmm(ref_x)\n    res_out = bench.triton.bmm(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

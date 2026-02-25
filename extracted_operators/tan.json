@@ -1,0 +1,23 @@
+{
+    "query": "操作符名字是 tan，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "tan",
+    "func_desc": "The tan operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "A",
+            "type": "Any",
+            "desc": "Parameter A"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.utils import pointwise_dynamic, tl_extra_shim\n\nlogger = logging.getLogger(__name__)\n\n\n@pointwise_dynamic(promotion_methods=[(0, \"INT_TO_FLOAT\")])\n@triton.jit\ndef tan_func(x):\n    y = tl_extra_shim.tan(x.to(tl.float32))\n    return y\n\n\ndef tan(A):\n    logger.debug(\"GEMS TAN\")\n    return tan_func(A)\n\n\ndef tan_(A):\n    logger.debug(\"GEMS TAN_\")\n    tan_func(A, out0=A)\n    return A",
+    "torch_kernel_code": "import torch\n\ndef tan(A):\n    return torch.tan(A)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"tan\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_tan(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.tan(ref_x)\n    res_out = bench.triton.tan(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

@@ -1,0 +1,43 @@
+{
+    "query": "操作符名字是 arange，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "arange",
+    "func_desc": "The arange operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "end",
+            "type": "Any",
+            "desc": "Parameter end"
+        },
+        {
+            "name": "dtype",
+            "type": "torch.Tensor",
+            "desc": "Parameter dtype"
+        },
+        {
+            "name": "layout",
+            "type": "torch.Tensor",
+            "desc": "Parameter layout"
+        },
+        {
+            "name": "device",
+            "type": "Any",
+            "desc": "Parameter device"
+        },
+        {
+            "name": "pin_memory",
+            "type": "torch.Tensor",
+            "desc": "Parameter pin_memory"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\nimport math\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems import runtime\nfrom flag_gems.utils import libentry\nfrom flag_gems.utils import triton_lang_extension as tle\n\nlogger = logging.getLogger(__name__)\n\n\n@libentry()\n@triton.jit\ndef arange_func(y_ptr, start, end, step, size, BLOCK_SIZE: tl.constexpr):\n    pid = tle.program_id(0)\n    y_ptr += pid * BLOCK_SIZE\n    step_offset = pid * BLOCK_SIZE * step\n\n    cols = tl.arange(0, BLOCK_SIZE)\n    arange_val = cols * step + step_offset + start\n    mask = cols + pid * BLOCK_SIZE\n    tl.store(y_ptr + cols, arange_val, mask=mask < size)\n\n\ndef arange_start(\n    start, end, step=1, *, dtype=None, layout=None, device=None, pin_memory=None\n):\n    logger.debug(\"GEMS ARANGE\")\n    if dtype is torch.int64:\n        sgn = (step > 0) - (step < 0)\n        size = (end - start + step - sgn) // step\n    else:\n        size = math.ceil((end - start) / step)\n\n    BLOCK_SIZE = 128\n    grid = triton.cdiv(size, BLOCK_SIZE)\n\n    if dtype is None:\n        dtype = torch.int64\n\n    if pin_memory is None:\n        pin_memory = False\n\n    if device is None:\n        device = (\n            runtime.device.name\n        )  # Note(Zhengzekang): Torch default value is CPU, but triton is target to GPU.\n\n    result = torch.empty((size,), device=device, dtype=dtype, pin_memory=pin_memory)\n    arange_func[grid,](result, start, end, step, size, BLOCK_SIZE)\n    return result\n\n\ndef arange(end, *, dtype=None, layout=None, device=None, pin_memory=None):\n    return arange_start(\n        0, end, 1, dtype=dtype, layout=layout, device=device, pin_memory=pin_memory\n    )",
+    "torch_kernel_code": "import torch\n\ndef arange(end, *, dtype=None, layout=None, device=None, pin_memory=None):\n    return torch.arange(end, dtype, layout, device, pin_memory)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"arange\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_arange(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.arange(ref_x)\n    res_out = bench.triton.arange(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

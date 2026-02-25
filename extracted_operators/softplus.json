@@ -1,0 +1,33 @@
+{
+    "query": "操作符名字是 softplus，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "softplus",
+    "func_desc": "The softplus operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "self",
+            "type": "Any",
+            "desc": "Parameter self"
+        },
+        {
+            "name": "beta",
+            "type": "float",
+            "desc": "Parameter beta"
+        },
+        {
+            "name": "threshold",
+            "type": "float",
+            "desc": "Parameter threshold"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.utils import pointwise_dynamic\n\nlogger = logging.getLogger(__name__)\n\n\n@pointwise_dynamic(is_tensor=[True, False, False], promotion_methods=[(0, \"DEFAULT\")])\n@triton.jit\ndef softplus_forward(x, beta, threshold):\n    x_fp = x.to(tl.float32)\n    z = x_fp * beta\n    soft_z = tl.where(z > threshold, z, tl.log(1 + tl.exp(z)))\n    out = (soft_z / beta).to(x.dtype)\n    return out\n\n\ndef softplus(self, beta=1.0, threshold=20.0):\n    logger.debug(\"GEMS SOFTPLUS FORWARD\")\n    output = softplus_forward(self, beta, threshold)\n    return output",
+    "torch_kernel_code": "import torch\n\ndef softplus(self, beta=1.0, threshold=20.0):\n    return torch.softplus(self, beta, threshold)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"softplus\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_softplus(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.softplus(ref_x)\n    res_out = bench.triton.softplus(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

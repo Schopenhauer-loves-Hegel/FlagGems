@@ -1,0 +1,33 @@
+{
+    "query": "操作符名字是 masked_fill，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "masked_fill",
+    "func_desc": "The masked_fill operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "mask",
+            "type": "Any",
+            "desc": "Parameter mask"
+        },
+        {
+            "name": "value",
+            "type": "Any",
+            "desc": "Parameter value"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.utils import broadcastable_to, pointwise_dynamic\n\nlogger = logging.getLogger(__name__)\n\n\n@pointwise_dynamic(is_tensor=[True, True, False], promotion_methods=[(0, \"NO_OPMATH\")])\n@triton.jit\ndef masked_fill_kernel(inp, expand_mask, value):\n    inp = tl.where(expand_mask == 1, value, inp)\n    return inp\n\n\ndef masked_fill(inp, mask, value):\n    logger.debug(\"GEMS MASKED FILL\")\n    assert (\n        (torch.is_tensor(value) and value.ndim == 0)\n        or isinstance(value, int)\n        or isinstance(value, float)\n    ), \"masked_fill_ only supports a 0-dimensional value tensor\"\n    if torch.is_tensor(value):\n        # Value can be a tensor or a scalar\n        value = value.item()\n    assert broadcastable_to(\n        mask.shape, inp.shape\n    ), \"The shape of mask must be broadcastable with the shape of the underlying tensor\"\n\n    if inp.ndim == 0:\n        # inp is a single-value\n        return (\n            torch.tensor(value, dtype=inp.dtype, device=inp.device)\n            if mask.item()\n            else inp.clone()\n        )\n\n    expand_mask = mask.expand(inp.shape)\n    return masked_fill_kernel(inp, expand_mask, value)\n\n\ndef masked_fill_(inp, mask, value):\n    logger.debug(\"GEMS MASKED FILL\")\n    assert (\n        (torch.is_tensor(value) and value.ndim == 0)\n        or isinstance(value, int)\n        or isinstance(value, float)\n    ), \"masked_fill_ only supports a 0-dimensional value tensor\"\n    if torch.is_tensor(value):\n        # Value can be a tensor or a scalar\n        value = value.item()\n    assert broadcastable_to(\n        mask.shape, inp.shape\n    ), \"The shape of mask must be broadcastable with the shape of the underlying tensor\"\n\n    if inp.ndim == 0:\n        # inp is a single-value\n        if mask.item():\n            inp[()] = value\n        return inp\n\n    expand_mask = mask.expand(inp.shape)\n    return masked_fill_kernel(inp, expand_mask, value, out0=inp)",
+    "torch_kernel_code": "import torch\n\ndef masked_fill(inp, mask, value):\n    return torch.masked_fill(inp, mask, value)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"masked_fill\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_masked_fill(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.masked_fill(ref_x)\n    res_out = bench.triton.masked_fill(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

@@ -1,0 +1,28 @@
+{
+    "query": "操作符名字是 glu，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "glu",
+    "func_desc": "The glu operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "self",
+            "type": "Any",
+            "desc": "Parameter self"
+        },
+        {
+            "name": "dim",
+            "type": "int",
+            "desc": "Parameter dim"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.utils import pointwise_dynamic, tl_extra_shim\n\nlogger = logging.getLogger(__name__)\nexp = tl_extra_shim.exp\n\n\n@pointwise_dynamic(promotion_methods=[(0, \"DEFAULT\")])\n@triton.jit\ndef glu_kernel(a, b):\n    sigmoid_b = 1 / (1 + exp(-b.to(tl.float32)))\n    result = a * sigmoid_b\n\n    return result\n\n\n@pointwise_dynamic(\n    promotion_methods=[\n        (0, 1, 2, \"DEFAULT\"),\n        (0, 1, 2, \"DEFAULT\"),\n    ]\n)\n@triton.jit\ndef glu_backward_kernel(grad_output, a, b):\n    sigmoid_b = 1 / (1 + exp(-b.to(tl.float32)))\n    da = grad_output * sigmoid_b\n    db = grad_output.to(tl.float32) * a * sigmoid_b * (1.0 - sigmoid_b)\n\n    return da, db\n\n\ndef glu(self, dim=-1):\n    assert self.shape[dim] % 2 == 0, \"Split dimension must be even\"\n    logger.debug(\"GLU FORWARD\")\n    # Split into a and b\n    a, b = torch.chunk(self, 2, dim=dim)\n    out = glu_kernel(a, b)\n\n    return out\n\n\ndef glu_backward(grad_output, self, dim=-1):\n    assert self.shape[dim] % 2 == 0, \"Split dimension must be even\"\n    logger.debug(\"GEMS GLU BACKWARD\")\n    # Recreate a and b\n    a, b = torch.chunk(self, 2, dim=dim)\n    grad_input = torch.empty_like(self, memory_format=torch.contiguous_format)\n    grad_a, grad_b = torch.chunk(grad_input, 2, dim=dim)\n    glu_backward_kernel(grad_output, a, b, out0=grad_a, out1=grad_b)\n\n    return grad_input",
+    "torch_kernel_code": "import torch\n\ndef glu(self, dim=-1):\n    return torch.glu(self, dim)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"glu\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_glu(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.glu(ref_x)\n    res_out = bench.triton.glu(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

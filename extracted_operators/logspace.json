@@ -1,0 +1,17 @@
+{
+    "query": "操作符名字是 logspace，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "logspace",
+    "func_desc": "The logspace operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\nimport math\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom ..utils import libentry\nfrom ..utils import triton_lang_extension as tle\n\nlogger = logging.getLogger(__name__)\n\n\n@libentry()\n@triton.jit\ndef logspace_kernel(\n    out_ptr,\n    out_stride0,\n    start,\n    step_size,\n    steps,\n    log2_base: tl.constexpr,\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tle.program_id(0)\n    idx = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    mask = idx < steps\n\n    exponent = start + idx * step_size\n    vals = tl.exp2(log2_base * exponent)\n\n    tl.store(out_ptr + idx * out_stride0, vals, mask=mask)\n\n\ndef logspace(\n    start,\n    end,\n    steps,\n    base=10.0,\n    *,\n    dtype=None,\n    layout=None,\n    device=None,\n    pin_memory=None,\n) -> torch.Tensor:\n    logger.debug(\"GEMS LOGSPACE\")\n    assert steps >= 0, \"number of steps must be non-negative\"\n    out_dtype = dtype if dtype is not None else torch.get_default_dtype()\n    out = torch.empty(\n        steps,\n        dtype=out_dtype,\n        layout=layout,\n        device=device,\n        pin_memory=pin_memory,\n    )\n    if steps == 0:\n        pass\n    elif steps == 1:\n        if isinstance(start, torch.Tensor):\n            start = start.item()\n        out = torch.fill(out, base**start)\n    else:\n        if isinstance(start, torch.Tensor):\n            start = start.item()\n        if isinstance(end, torch.Tensor):\n            end = end.item()\n        step_size = (float(end) - float(start)) / (steps - 1)\n        BLOCK_SIZE = 256  # according to benchmark, 256 is the best block size\n        grid = (triton.cdiv(steps, BLOCK_SIZE),)\n        logspace_kernel[grid](\n            out,\n            out.stride(0),\n            start,\n            step_size,\n            steps,\n            log2_base=math.log2(float(base)),  # math.log2 require float input\n            BLOCK_SIZE=BLOCK_SIZE,\n        )\n\n    return out",
+    "torch_kernel_code": "import torch\n\ndef logspace(*args, **kwargs):\n    # TODO: Implement torch version\n    return torch.logspace(*args, **kwargs)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"logspace\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_logspace(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.logspace(ref_x)\n    res_out = bench.triton.logspace(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

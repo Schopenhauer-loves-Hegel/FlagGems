@@ -1,0 +1,53 @@
+{
+    "query": "操作符名字是 conv1d，是一个 conv 算子，处理硬件是 Nvidia。",
+    "kernel_name": "conv1d",
+    "func_desc": "The conv1d operator",
+    "func_type": "conv",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "input",
+            "type": "torch.Tensor",
+            "desc": "Parameter input"
+        },
+        {
+            "name": "weight",
+            "type": "torch.Tensor",
+            "desc": "Parameter weight"
+        },
+        {
+            "name": "bias",
+            "type": "torch.Tensor",
+            "desc": "Parameter bias"
+        },
+        {
+            "name": "stride",
+            "type": "int",
+            "desc": "Parameter stride"
+        },
+        {
+            "name": "padding",
+            "type": "int",
+            "desc": "Parameter padding"
+        },
+        {
+            "name": "dilation",
+            "type": "int",
+            "desc": "Parameter dilation"
+        },
+        {
+            "name": "groups",
+            "type": "int",
+            "desc": "Parameter groups"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nfrom .conv2d import conv2d\n\n\ndef conv1d(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1):\n    if isinstance(stride, (list, tuple)):\n        stride_width = stride[0]\n    else:\n        stride_width = stride\n\n    if isinstance(padding, (list, tuple)):\n        padding_width = padding[0]\n    else:\n        padding_width = padding\n    return conv2d(\n        input.unsqueeze(-1),\n        weight.unsqueeze(-1),\n        bias,\n        (stride_width, 1),\n        (padding_width, 0),\n        dilation,\n        groups,\n    ).squeeze(-1)",
+    "torch_kernel_code": "import torch\n\ndef conv1d(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1):\n    return torch.nn.functional.conv1d(input, weight, bias=bias, stride=stride, padding=padding, dilation=dilation, groups=groups)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"conv1d\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_conv1d(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.conv1d(ref_x)\n    res_out = bench.triton.conv1d(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

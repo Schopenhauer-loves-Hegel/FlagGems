@@ -1,0 +1,28 @@
+{
+    "query": "操作符名字是 prod，是一个 reduction 算子，处理硬件是 Nvidia。",
+    "kernel_name": "prod",
+    "func_desc": "The prod operator",
+    "func_type": "reduction",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "dtype",
+            "type": "torch.Tensor",
+            "desc": "Parameter dtype"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\nimport math\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems import runtime\nfrom flag_gems.runtime import torch_device_fn\nfrom flag_gems.utils import dim_compress, libentry, libtuner\nfrom flag_gems.utils import triton_lang_extension as tle\n\nlogger = logging.getLogger(__name__)\n\n\n@triton.jit\ndef reduce_mul(a, b):\n    return a * b\n\n\n@libentry()\n@triton.jit\ndef prod_kernel_mid(\n    inp,\n    mid,\n    M,\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tle.program_id(0)\n    offset = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    inp_ptrs = inp + offset\n    mask = offset < M\n    inp_val = tl.load(inp_ptrs, mask=mask, other=1.0).to(tl.float32)\n    mid_value = tl.reduce(inp_val, axis=0, combine_fn=reduce_mul)\n    mid_ptr = mid + pid\n    tl.store(mid_ptr, mid_value.to(inp_val.dtype))\n\n\n@libentry()\n@triton.jit\ndef prod_kernel_result(mid, out, mid_size, BLOCK_MID: tl.constexpr):\n    offset = tl.arange(0, BLOCK_MID)\n    mid_ptrs = mid + offset\n    mask = offset < mid_size\n    mid_val = tl.load(mid_ptrs, mask=mask, other=1.0).to(tl.float32)\n    prod_val = tl.reduce(mid_val, axis=0, combine_fn=reduce_mul)\n    tl.store(out, prod_val)\n\n\ndef prod(inp, *, dtype=None):\n    logger.debug(\"GEMS PROD\")\n    if dtype is None:\n        dtype = inp.dtype\n\n    M = inp.numel()\n    block_size = triton.next_power_of_2(math.ceil(math.sqrt(M)))\n    mid_size = triton.cdiv(M, block_size)\n    block_mid = triton.next_power_of_2(mid_size)\n\n    mid = torch.empty((mid_size,), dtype=dtype, device=inp.device)\n    out = torch.empty([], dtype=dtype, device=inp.device)\n\n    with torch_device_fn.device(inp.device):\n        prod_kernel_mid[(mid_size, 1, 1)](inp, mid, M, block_size)\n        prod_kernel_result[(1, 1, 1)](mid, out, mid_size, block_mid)\n    return out\n\n\ndef heur_block_n(args):\n    return triton.next_power_of_2(args[\"N\"])\n\n\n@libentry()\n@libtuner(\n    configs=runtime.get_tuned_config(\"naive_reduction\"),\n    key=[\"M\", \"N\"],\n)\n@triton.jit\ndef prod_kernel(\n    inp,\n    out,\n    M,\n    N,\n    BLOCK_M: tl.constexpr,\n    BLOCK_N: tl.constexpr,\n):\n    # set offset\n    pid_m = tle.program_id(0)\n    m_offset = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)\n\n    acc = tl.full((BLOCK_M, BLOCK_N), value=1.0, dtype=tl.float32)\n    for start_n in range(0, N, BLOCK_N):\n        n_offset = start_n + tl.arange(0, BLOCK_N)\n        offset = m_offset[:, None] * N + n_offset[None, :]\n\n        # set mask\n        mask = m_offset[:, None] < M and n_offset[None, :] < N\n        inp_ptrs = inp + offset\n        inp_vals = tl.load(inp_ptrs, mask=mask, other=1.0).to(tl.float32)\n        acc *= inp_vals\n    result_index = tl.reduce(acc, axis=1, combine_fn=reduce_mul)\n\n    offset_index = m_offset\n    out_ptrs = out + offset_index\n    mask1 = m_offset < M\n    tl.store(out_ptrs, result_index, mask=mask1)\n\n\ndef prod_dim(inp, dim=None, keepdim=False, *, dtype=None):\n    logger.debug(\"GEMS PROD DIM\")\n\n    assert dim >= -inp.ndim and dim < inp.ndim, \"Invalid dim\"\n    shape = list(inp.shape)\n    dim = dim % inp.ndim\n    inp = dim_compress(inp, dim)\n    N = shape[dim]\n    shape[dim] = 1\n    M = inp.numel() // N\n\n    if dtype is None:\n        dtype = inp.dtype\n    out = torch.empty(shape, dtype=dtype, device=inp.device)\n    if not keepdim:\n        out = torch.squeeze(out, dim)\n\n    grid = lambda meta: (triton.cdiv(M, meta[\"BLOCK_M\"]),)\n    with torch_device_fn.device(inp.device):\n        prod_kernel[grid](inp, out, M, N)\n\n    return out",
+    "torch_kernel_code": "import torch\n\ndef prod(inp, *, dtype=None):\n    return torch.prod(inp)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"prod\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_prod(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.prod(ref_x)\n    res_out = bench.triton.prod(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

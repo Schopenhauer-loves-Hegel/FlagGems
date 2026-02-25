@@ -1,0 +1,17 @@
+{
+    "query": "操作符名字是 linspace，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "linspace",
+    "func_desc": "The linspace operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.utils import libentry\nfrom flag_gems.utils import triton_lang_extension as tle\n\nlogger = logging.getLogger(__name__)\n\n\n@libentry()\n@triton.jit\ndef linspace_kernel(\n    out_ptr,\n    out_stride0,\n    start,\n    mid,\n    end,\n    step_size,\n    steps,\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tle.program_id(0)\n    idx = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    mask = idx < steps\n    fw_mask = idx < mid\n    fw_values = start + (step_size * idx)\n    bd_values = end - step_size * (steps - idx - 1)\n\n    out_val = tl.where(fw_mask, fw_values, bd_values)\n    tl.store(out_ptr + idx * out_stride0, out_val, mask=mask)\n\n\ndef linspace(\n    start, end, steps, *, dtype=None, layout=None, device=None, pin_memory=None\n) -> torch.Tensor:\n    logger.debug(\"GEMS LINSPACE\")\n    assert steps >= 1, \"steps must be >= 1\"\n\n    out = torch.empty(\n        steps,\n        dtype=dtype,\n        layout=layout,\n        device=device,\n        pin_memory=pin_memory,\n    )\n    if steps == 1:\n        return torch.fill(out, start)\n    else:\n        if isinstance(start, torch.Tensor):\n            start = start.item()\n        if isinstance(end, torch.Tensor):\n            end = end.item()\n        mid = steps // 2\n        step_size = (float(end) - float(start)) / (steps - 1)\n        BLOCK_SIZE = 128\n        grid = (triton.cdiv(steps, BLOCK_SIZE),)\n        linspace_kernel[grid](\n            out, out.stride(0), start, mid, end, step_size, steps, BLOCK_SIZE=BLOCK_SIZE\n        )\n        return out",
+    "torch_kernel_code": "import torch\n\ndef linspace(*args, **kwargs):\n    # TODO: Implement torch version\n    return torch.linspace(*args, **kwargs)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"linspace\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_linspace(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.linspace(ref_x)\n    res_out = bench.triton.linspace(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

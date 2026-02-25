@@ -1,0 +1,38 @@
+{
+    "query": "操作符名字是 var_mean，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "var_mean",
+    "func_desc": "The var_mean operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "x",
+            "type": "torch.Tensor",
+            "desc": "Parameter x"
+        },
+        {
+            "name": "dim",
+            "type": "int",
+            "desc": "Parameter dim"
+        },
+        {
+            "name": "correction",
+            "type": "Any",
+            "desc": "Parameter correction"
+        },
+        {
+            "name": "keepdim",
+            "type": "int",
+            "desc": "Parameter keepdim"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems import runtime\nfrom flag_gems.runtime import torch_device_fn\nfrom flag_gems.utils import dim_compress, libentry\nfrom flag_gems.utils import triton_lang_extension as tle\n\nlogger = logging.getLogger(__name__)\n\n\n@triton.jit\ndef welford_func(mean_x, count_x, M_x, mean_y, count_y, M_y):\n    count = count_x + count_y\n    _count = tl.maximum(count, 1)\n    mc_x = mean_x * count_x\n    mc_y = mean_y * count_y\n    mean = (mc_x + mc_y) / _count\n    M = M_x + mc_x * mean_x + M_y + mc_y * mean_y - count * mean * mean\n    return mean, count, M\n\n\n@libentry()\n@triton.autotune(configs=runtime.get_tuned_config(\"var_mean\"), key=[\"M\", \"N\"])\n@triton.jit(do_not_specialize=[\"correction\"])\ndef var_mean_welford_kernel(\n    X,\n    Var,\n    Mean,\n    M,\n    N,\n    correction,\n    BLOCK_M: tl.constexpr,\n    BLOCK_N: tl.constexpr,\n):\n    # Map the program id to the row of X it should compute.\n    pid = tle.program_id(0) * BLOCK_M + tl.arange(0, BLOCK_M)[:, None]\n    X = X + pid * N\n    Var = Var + pid\n    Mean = Mean + pid\n    row_mask = pid < M\n\n    _mean = tl.zeros([BLOCK_M, BLOCK_N], dtype=tl.float32)\n    _acc = tl.zeros([BLOCK_M, BLOCK_N], dtype=tl.float32)\n    _count = tl.zeros([BLOCK_M, BLOCK_N], dtype=tl.float32)\n    for off in range(0, N, BLOCK_N):\n        cols = off + tl.arange(0, BLOCK_N)[None, :]\n        col_mask = cols < N\n        mask = row_mask and col_mask\n\n        x = tl.load(X + cols, mask, other=0.0).to(tl.float32)\n\n        count = _count + mask\n        cnt = tl.maximum(count, 1)\n        cur_mean = (_mean * _count + x) / cnt\n        _acc += (x - cur_mean) * (x - _mean) * mask\n        _mean = cur_mean\n        _count = count\n\n    mean, _, acc = tl.reduce((_mean, _count, _acc), axis=1, combine_fn=welford_func)\n    var = acc / (N - correction)\n    mean = mean[:, None]\n    var = var[:, None]\n    # Write mean / var\n    tl.store(Mean, mean, row_mask)\n    tl.store(Var, var, row_mask)\n\n\n@libentry()\n@triton.jit\ndef var_mean_kernel_1(\n    X,\n    Acc,\n    Average,\n    Count,\n    N,\n    BLOCK_N: tl.constexpr,\n):\n    # Map the program id to the row of X it should compute.\n    pid = tle.program_id(0)\n    offset = pid * BLOCK_N + tl.arange(0, BLOCK_N)\n\n    X = X + offset\n    Acc = Acc + pid\n    Average = Average + pid\n    Count = Count + pid\n    mask = offset < N\n\n    x = tl.load(X, mask, other=0.0).to(tl.float32)\n\n    count = tl.sum(mask.to(tl.float32))\n    average = tl.sum(x) / count\n    acc = tl.sum(x * x) - count * average * average\n\n    tl.store(Average, average)\n    tl.store(Acc, acc)\n    tl.store(Count, count)\n\n\n@libentry()\n@triton.heuristics(runtime.get_heuristic_config(\"var_mean\"))\n@triton.jit(do_not_specialize=[\"correction\"])\ndef var_mean_kernel_2(\n    Acc,\n    Average,\n    Count,\n    Var,\n    Mean,\n    N,\n    correction,\n    BLOCK_NUM,\n    BLOCK_N: tl.constexpr,\n):\n    offset = tl.arange(0, BLOCK_N)\n    mask = offset < BLOCK_NUM\n    Acc = Acc + offset\n    Average = Average + offset\n    Count = Count + offset\n    acc = tl.load(Acc, mask, other=0.0).to(tl.float32)\n    average = tl.load(Average, mask, other=0.0).to(tl.float32)\n    count = tl.load(Count, mask, other=0.0).to(tl.float32)\n\n    mean, _, nvar = tl.reduce((average, count, acc), axis=0, combine_fn=welford_func)\n\n    var = nvar / (N - correction)\n    tl.store(Mean, mean)\n    tl.store(Var, var)\n\n\ndef var_mean(x, dim=None, *, correction=None, keepdim=False):\n    logger.debug(\"GEMS VAR MEAN\")\n    if correction is None:\n        correction = 1.0\n\n    if dim is None or len(dim) == x.ndim:\n        dim = list(range(x.ndim))\n        shape = [1] * x.ndim\n        N = x.numel()\n        var = torch.empty(shape, dtype=x.dtype, device=x.device)\n        mean = torch.empty(shape, dtype=x.dtype, device=x.device)\n        BLOCK_N = 1024\n        BLOCK_NUM = triton.cdiv(N, BLOCK_N)\n        acc = torch.empty([BLOCK_NUM], dtype=x.dtype, device=x.device)\n        average = torch.empty([BLOCK_NUM], dtype=x.dtype, device=x.device)\n        count = torch.empty([BLOCK_NUM], dtype=x.dtype, device=x.device)\n\n        with torch_device_fn.device(x.device):\n            var_mean_kernel_1[(BLOCK_NUM,)](x, acc, average, count, N, BLOCK_N=BLOCK_N)\n            var_mean_kernel_2[(1,)](\n                acc, average, count, var, mean, N, correction, BLOCK_NUM\n            )\n    else:\n        shape = list(x.shape)\n        dim = [d % x.ndim for d in dim]\n        x = dim_compress(x, dim)\n        N = 1\n        for i in dim:\n            N *= shape[i]\n            shape[i] = 1\n        M = x.numel() // N\n        var = torch.empty(shape, dtype=x.dtype, device=x.device)\n        mean = torch.empty(shape, dtype=x.dtype, device=x.device)\n\n        grid = lambda META: (triton.cdiv(M, META[\"BLOCK_M\"]),)\n        with torch_device_fn.device(x.device):\n            var_mean_welford_kernel[grid](x, var, mean, M, N, correction)\n\n    if not keepdim:\n        var = var.squeeze(dim=dim)\n        mean = mean.squeeze(dim=dim)\n    return var, mean",
+    "torch_kernel_code": "import torch\n\ndef var_mean(x, dim=None, *, correction=None, keepdim=False):\n    return torch.var_mean(x, dim, correction, keepdim)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"var_mean\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_var_mean(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.var_mean(ref_x)\n    res_out = bench.triton.var_mean(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

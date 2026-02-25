@@ -1,0 +1,23 @@
+{
+    "query": "操作符名字是 trace，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "trace",
+    "func_desc": "The trace operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "self",
+            "type": "Any",
+            "desc": "Parameter self"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.runtime import torch_device_fn\nfrom flag_gems.utils import libentry\n\nlogger = logging.getLogger(__name__)\n\n\n@libentry()\n@triton.jit\ndef trace_kernel(\n    inp_ptr,\n    out_ptr,\n    num_diag,\n    stride0,\n    stride1,\n    BLOCK_SIZE: tl.constexpr,\n):\n    inp_dtype = inp_ptr.type.element_ty\n    if inp_dtype.is_int():\n        acc_dtype = tl.int64\n        other_val = 0\n    elif inp_dtype == tl.float64:\n        acc_dtype = tl.float64\n        other_val = 0.0\n    else:\n        acc_dtype = tl.float32\n        other_val = 0.0\n\n    acc = tl.zeros((BLOCK_SIZE,), dtype=acc_dtype)\n\n    diag_stride = stride0 + stride1\n\n    for i in range(0, tl.cdiv(num_diag, BLOCK_SIZE)):\n        block_start = i * BLOCK_SIZE\n        current_indices = block_start + tl.arange(0, BLOCK_SIZE)\n\n        mask = current_indices < num_diag\n\n        ptr_offsets = current_indices * diag_stride\n        current_ptrs = inp_ptr + ptr_offsets\n\n        vals = tl.load(current_ptrs, mask=mask, other=other_val)\n\n        acc += vals.to(acc_dtype)\n\n    final_sum = tl.sum(acc, axis=0)\n    tl.store(out_ptr, final_sum.to(out_ptr.type.element_ty))\n\n\ndef trace(self):\n    logger.debug(\"GEMS TRACE\")\n\n    if self.ndim != 2:\n        raise RuntimeError(\n            f\"trace: expected a 2D tensor, but got a {self.ndim}D tensor\"\n        )\n\n    M, N = self.shape\n    stride0, stride1 = self.stride()\n    num_diag = min(M, N)\n    if num_diag == 0:\n        if self.dtype.is_floating_point:\n            return torch.tensor(0.0, dtype=self.dtype, device=self.device)\n        else:\n            return torch.tensor(0, dtype=torch.int64, device=self.device)\n\n    if self.dtype.is_floating_point:\n        output_dtype = self.dtype\n    else:\n        output_dtype = torch.int64\n    out = torch.empty((), dtype=output_dtype, device=self.device)\n\n    grid = (1,)\n    BLOCK_SIZE = 1024\n    if num_diag < BLOCK_SIZE:\n        BLOCK_SIZE = triton.next_power_of_2(num_diag)\n        if BLOCK_SIZE == 0:\n            BLOCK_SIZE = 1\n\n    with torch_device_fn.device(self.device):\n        trace_kernel[grid](\n            self,\n            out,\n            num_diag,\n            stride0,\n            stride1,\n            BLOCK_SIZE=BLOCK_SIZE,\n        )\n\n    return out",
+    "torch_kernel_code": "import torch\n\ndef trace(self):\n    return torch.trace(self)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"trace\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_trace(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.trace(ref_x)\n    res_out = bench.triton.trace(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

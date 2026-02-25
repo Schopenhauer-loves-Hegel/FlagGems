@@ -1,0 +1,43 @@
+{
+    "query": "操作符名字是 rand，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "rand",
+    "func_desc": "The rand operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "size",
+            "type": "int",
+            "desc": "Parameter size"
+        },
+        {
+            "name": "dtype",
+            "type": "torch.Tensor",
+            "desc": "Parameter dtype"
+        },
+        {
+            "name": "layout",
+            "type": "torch.Tensor",
+            "desc": "Parameter layout"
+        },
+        {
+            "name": "device",
+            "type": "Any",
+            "desc": "Parameter device"
+        },
+        {
+            "name": "pin_memory",
+            "type": "torch.Tensor",
+            "desc": "Parameter pin_memory"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems import runtime\nfrom flag_gems.runtime import device, torch_device_fn\nfrom flag_gems.utils.random_utils import (\n    philox_backend_seed_offset,\n    uint_to_uniform_float,\n)\nfrom flag_gems.utils.shape_utils import volume\n\nlogger = logging.getLogger(__name__)\ndevice_ = device\n\n\n@triton.heuristics(runtime.get_heuristic_config(\"rand\"))\n@triton.jit(do_not_specialize=[\"philox_seed\", \"philox_offset\"])\ndef rand_kernel(\n    out_ptr,\n    N,\n    philox_seed,\n    philox_offset,\n    BLOCK: tl.constexpr,\n):\n    philox_seed = philox_seed.to(tl.int64)\n    philox_offset = philox_offset.to(tl.int64)\n    c0 = (philox_offset & 0xFFFFFFFF).to(tl.uint32)\n    c1 = ((philox_offset >> 32) & 0xFFFFFFFF).to(tl.uint32)\n    i4 = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)\n    c0 += i4\n    _O = c0 * 0\n    r0, r1, r2, r3 = tl.philox(philox_seed, c0, c1, _O, _O)\n    r0 = uint_to_uniform_float(r0)\n    r1 = uint_to_uniform_float(r1)\n    r2 = uint_to_uniform_float(r2)\n    r3 = uint_to_uniform_float(r3)\n    off_0 = tl.program_id(0) * BLOCK * 4 + tl.arange(0, BLOCK)\n    off_1 = off_0 + BLOCK\n    off_2 = off_1 + BLOCK\n    off_3 = off_2 + BLOCK\n    tl.store(out_ptr + off_0, r0, mask=off_0 < N, eviction_policy=\"evict_first\")\n    tl.store(out_ptr + off_1, r1, mask=off_1 < N, eviction_policy=\"evict_first\")\n    tl.store(out_ptr + off_2, r2, mask=off_2 < N, eviction_policy=\"evict_first\")\n    tl.store(out_ptr + off_3, r3, mask=off_3 < N, eviction_policy=\"evict_first\")\n\n\nUNROLL = 4\n\n\ndef rand(size, *, dtype=None, layout=None, device=None, pin_memory=None):\n    logger.debug(\"GEMS RAND\")\n    if dtype is None:\n        dtype = torch.get_default_dtype()\n    if device is None:\n        device = torch.device(device_.name)\n\n    out = torch.empty(size, device=device, dtype=dtype)\n    N = volume(size)\n    grid_fn = lambda meta: (triton.cdiv(N, meta[\"BLOCK\"] * UNROLL),)\n    # (TODO) Using Triton autotuner makes kernel parameters opaque to the caller,\n    # hence we cannot obtain the per thread offset as in Pytorch.\n    increment = triton.cdiv(N, UNROLL)\n    philox_seed, philox_offset = philox_backend_seed_offset(increment)\n    with torch_device_fn.device(device):\n        rand_kernel[grid_fn](out, N, philox_seed, philox_offset)\n    return out",
+    "torch_kernel_code": "import torch\n\ndef rand(size, *, dtype=None, layout=None, device=None, pin_memory=None):\n    return torch.rand(size, dtype, layout, device, pin_memory)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"rand\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_rand(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.rand(ref_x)\n    res_out = bench.triton.rand(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

@@ -1,0 +1,17 @@
+{
+    "query": "操作符名字是 flip，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "flip",
+    "func_desc": "The flip operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\n\nfrom ..utils import pointwise_dynamic\nfrom ..utils.tensor_wrapper import StridedBuffer\n\n\n@pointwise_dynamic(is_tensor=[True], promotion_methods=[(0, \"DEFAULT\")])\n@triton.jit\ndef copy_func(x):\n    return x\n\n\ndef flip(A: torch.Tensor, dims) -> torch.Tensor:\n    strides = list(A.stride())\n    flip_dims_b = [False for _ in A.stride()]\n    for dim in dims:\n        assert (\n            dim >= -A.dim() and dim < A.dim()\n        ), \"Dimension out of range (expected to be in range of [{}, {}], but got {})\".format(\n            -A.dim(), A.dim() - 1, dim\n        )\n        assert not flip_dims_b[\n            dim\n        ], \"dim {} appears multiple times in the list of dims\".format(dim)\n        flip_dims_b[dim] = True\n    n = 0\n    offset = 0\n    for i in range(len(flip_dims_b)):\n        if flip_dims_b[i] and A.size(i) > 1 and A.stride(i) != 0:\n            offset += strides[i] * (A.shape[i] - 1)\n            strides[i] = -strides[i]\n            n += 1\n    if n == 0 or A.numel() <= 1:\n        return A.clone()\n    out = torch.empty_like(A)\n    # a flipped view of A\n    flipped_A = StridedBuffer(A, strides=strides, offset=offset)\n\n    # TODO: flip op can have a custom task simplification method, but we skip it now and just use A's rank.\n    overload = copy_func.instantiate(A.ndim)\n    overload(flipped_A, out0=out)\n    return out",
+    "torch_kernel_code": "import torch\n\ndef flip(*args, **kwargs):\n    # TODO: Implement torch version\n    return torch.flip(*args, **kwargs)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"flip\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_flip(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.flip(ref_x)\n    res_out = bench.triton.flip(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

@@ -1,0 +1,43 @@
+{
+    "query": "操作符名字是 embedding，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "embedding",
+    "func_desc": "The embedding operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "weight",
+            "type": "torch.Tensor",
+            "desc": "Parameter weight"
+        },
+        {
+            "name": "indices",
+            "type": "Any",
+            "desc": "Parameter indices"
+        },
+        {
+            "name": "padding_idx",
+            "type": "torch.Tensor",
+            "desc": "Parameter padding_idx"
+        },
+        {
+            "name": "scale_grad_by_freq",
+            "type": "torch.Tensor",
+            "desc": "Parameter scale_grad_by_freq"
+        },
+        {
+            "name": "sparse",
+            "type": "bool",
+            "desc": "Parameter sparse"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\nimport math\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom ..runtime import torch_device_fn\nfrom ..utils import libentry\nfrom ..utils import triton_lang_extension as tle\n\n\n@libentry()\n@triton.jit\ndef embedding_kernel(\n    out_ptr,  # pointer to the output\n    in_ptr,  # pointer to the input\n    weight_ptr,  # pointer to the weights\n    N: tl.constexpr,  # number of columns in X\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tle.program_id(0)\n    out_ptr += pid * N\n    in_ptr += pid\n\n    mask = tl.arange(0, BLOCK_SIZE) < N\n    cols = tl.arange(0, BLOCK_SIZE)\n\n    row_idx = tl.load(in_ptr)\n    weight_ptr += row_idx * N\n    embedding_weight = tl.load(weight_ptr + cols, mask, other=0.0)\n    tl.store(out_ptr + cols, embedding_weight, mask)\n\n\n@libentry()\n@triton.jit\ndef indice_freq_kernel(\n    indices_freq,\n    indices,  # pointer to the input\n    elem_cnt: tl.constexpr,  # number of columns in X\n    INDICE_BLOCK_SIZE: tl.constexpr,\n):\n    pid = tle.program_id(0)\n    block_start = pid * INDICE_BLOCK_SIZE\n\n    offsets = block_start + tl.arange(0, INDICE_BLOCK_SIZE)\n    mask = offsets < elem_cnt\n\n    index_element = tl.load(indices + offsets, mask=mask)\n    tl.atomic_add(indices_freq + index_element, 1, mask=mask)\n\n\n@libentry()\n@triton.jit(do_not_specialize=[\"padding_idx\"])\ndef embedding_backward_kernel(\n    grad_in,  # pointer to the gradient input\n    grad_out,  # pointer to the gradient output\n    indices,  # pointer to the input\n    padding_idx,  # padding_idx\n    HAS_PADDING_IDX: tl.constexpr,\n    N: tl.constexpr,  # number of columns in X\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tle.program_id(0)\n    grad_out += pid * N\n    indices += pid\n\n    mask = tl.arange(0, BLOCK_SIZE) < N\n    cols = tl.arange(0, BLOCK_SIZE)\n\n    row_idx = tl.load(indices).to(tl.int32)\n    if not HAS_PADDING_IDX:\n        grad_in += row_idx * N\n        embedding_grad = tl.load(grad_out + cols, mask, other=0.0)\n        if tl.constexpr(embedding_grad.dtype.is_bf16()):\n            embedding_grad = embedding_grad.to(tl.float32)\n        tl.atomic_add(grad_in + cols, embedding_grad, mask=mask)\n    else:\n        if row_idx != padding_idx:\n            grad_in += row_idx * N\n            embedding_grad = tl.load(grad_out + cols, mask, other=0.0)\n            if tl.constexpr(embedding_grad.dtype.is_bf16()):\n                embedding_grad = embedding_grad.to(tl.float32)\n            tl.atomic_add(grad_in + cols, embedding_grad, mask=mask)\n\n\n@libentry()\n@triton.jit(do_not_specialize=[\"n_rows\"])\ndef embedding_grad_scale_kernel(\n    grad_out,\n    indice_freq,\n    n_rows,\n    N,\n    BLOCK_SIZE: tl.constexpr,\n):\n    row_start = tle.program_id(0)\n    row_step = tle.num_programs(0)\n\n    for row_idx in range(row_start, n_rows, row_step):\n        embedding_scale = 1.0\n        indice_freq_val = tl.load(indice_freq + row_idx)\n        if indice_freq_val > 1:\n            embedding_scale = 1.0 / indice_freq_val\n\n        cols = tl.arange(0, BLOCK_SIZE)\n        mask = tl.arange(0, BLOCK_SIZE) < N\n        embedding_grad = tl.load(grad_out + row_idx * N + cols, mask=mask)\n        scaled_embedding_grad = embedding_grad * embedding_scale\n        tl.store(grad_out + row_idx * N + cols, scaled_embedding_grad, mask=mask)\n\n\nclass Embedding(torch.autograd.Function):\n    @staticmethod\n    def forward(\n        ctx, weight, indices, padding_idx=-1, scale_grad_by_freq=False, sparse=False\n    ):\n        assert not sparse, \"Currently do not support sparse format\"\n\n        M = math.prod(indices.shape)\n        N = weight.shape[-1]\n\n        BLOCK_SIZE = triton.next_power_of_2(N)\n        indices = indices.contiguous()\n        weight = weight.contiguous()\n        output = torch.empty(\n            (*indices.shape, N), device=indices.device, dtype=weight.dtype\n        )\n\n        with torch_device_fn.device(weight.device):\n            embedding_kernel[M,](output, indices, weight, N, BLOCK_SIZE)\n\n        ctx.M = M\n        ctx.N = N\n        ctx.num_weights = weight.shape[0]\n        ctx.padding_idx = padding_idx\n        ctx.scale_grad_by_freq = scale_grad_by_freq\n        ctx.sparse = sparse\n        ctx.indices = indices\n\n        return output\n\n    @staticmethod\n    def backward(ctx, grad_outputs):\n        assert not ctx.sparse, \"Currently do not support sparse format\"\n\n        grad_inputs = torch.zeros(\n            (ctx.num_weights, grad_outputs.shape[-1]),\n            device=grad_outputs.device,\n            dtype=(\n                torch.float32\n                if grad_outputs.dtype is torch.bfloat16\n                else grad_outputs.dtype\n            ),\n        )\n\n        if ctx.scale_grad_by_freq:\n            indice_freq = torch.zeros(\n                (ctx.num_weights,),\n                requires_grad=False,\n                device=grad_outputs.device,\n                dtype=torch.int32,\n            )\n            INDICE_BLOCK_SIZE = 256\n            indice_grid = lambda meta: (triton.cdiv(ctx.M, INDICE_BLOCK_SIZE),)\n\n            with torch_device_fn.device(grad_outputs.device):\n                indice_freq_kernel[indice_grid](\n                    indice_freq, ctx.indices, ctx.M, INDICE_BLOCK_SIZE\n                )\n        else:\n            indice_freq = None\n\n        BLOCK_SIZE = triton.next_power_of_2(ctx.N)\n\n        HAS_PADDING_IDX = ctx.padding_idx is not None\n\n        with torch_device_fn.device(grad_outputs.device):\n            embedding_backward_kernel[ctx.M,](\n                grad_inputs,\n                grad_outputs,\n                ctx.indices,\n                ctx.padding_idx,\n                HAS_PADDING_IDX,\n                ctx.N,\n                BLOCK_SIZE,\n            )\n\n        if ctx.scale_grad_by_freq:\n            with torch_device_fn.device(grad_outputs.device):\n                embedding_grad_scale_kernel[ctx.M,](\n                    grad_inputs, indice_freq, ctx.num_weights, ctx.N, BLOCK_SIZE\n                )\n        return (\n            (\n                grad_inputs.to(torch.bfloat16)\n                if grad_outputs.dtype is torch.bfloat16\n                else grad_inputs\n            ),\n            None,\n            None,\n            None,\n            None,\n        )\n\n\ndef embedding(weight, indices, padding_idx=-1, scale_grad_by_freq=False, sparse=False):\n    return Embedding.apply(weight, indices, padding_idx, scale_grad_by_freq, sparse)",
+    "torch_kernel_code": "import torch\n\ndef embedding(weight, indices, padding_idx=-1, scale_grad_by_freq=False, sparse=False):\n    return torch.embedding(weight, indices, padding_idx=padding_idx, scale_grad_by_freq=scale_grad_by_freq, sparse=sparse)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"embedding\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_embedding(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.embedding(ref_x)\n    res_out = bench.triton.embedding(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

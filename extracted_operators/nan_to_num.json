@@ -1,0 +1,38 @@
+{
+    "query": "操作符名字是 nan_to_num，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "nan_to_num",
+    "func_desc": "The nan_to_num operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "A",
+            "type": "Any",
+            "desc": "Parameter A"
+        },
+        {
+            "name": "nan",
+            "type": "Any",
+            "desc": "Parameter nan"
+        },
+        {
+            "name": "posinf",
+            "type": "Any",
+            "desc": "Parameter posinf"
+        },
+        {
+            "name": "neginf",
+            "type": "Any",
+            "desc": "Parameter neginf"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.utils import pointwise_dynamic, tl_extra_shim\n\n_isnan = tl_extra_shim.isnan\n\nlogger = logging.getLogger(__name__)\n\n\n@pointwise_dynamic(\n    is_tensor=[True, False, False, False], promotion_methods=[(0, \"DEFAULT\")]\n)\n@triton.jit\ndef nan_to_num_func(x, nan, posinf, neginf):\n    x_nan = _isnan(x.to(tl.float32))\n    x_posinf = x == float(\"inf\")\n    x_neginf = x == -float(\"inf\")\n    x = tl.where(x_nan, nan, x)\n    x = tl.where(x_posinf, posinf, x)\n    x = tl.where(x_neginf, neginf, x)\n    return x\n\n\n# nan_to_num(Tensor self, float? nan=None, float? posinf=None, float? neginf=None) -> Tensor\ndef nan_to_num(A, nan=None, posinf=None, neginf=None):\n    logger.debug(\"GEMS NAN_TO_NUM TENSOR\")\n    if posinf is None:\n        posinf = torch.finfo(A.dtype).max\n    if neginf is None:\n        neginf = torch.finfo(A.dtype).min\n    if nan is None:\n        nan = 0.0\n    return nan_to_num_func(A, nan, posinf, neginf)",
+    "torch_kernel_code": "import torch\n\ndef nan_to_num(A, nan=None, posinf=None, neginf=None):\n    return torch.nan_to_num(A, nan, posinf, neginf)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"nan_to_num\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_nan_to_num(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.nan_to_num(ref_x)\n    res_out = bench.triton.nan_to_num(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

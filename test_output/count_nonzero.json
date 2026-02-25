@@ -1,0 +1,28 @@
+{
+    "query": "操作符名字是 count_nonzero，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "count_nonzero",
+    "func_desc": "The count_nonzero operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "x",
+            "type": "torch.Tensor",
+            "desc": "Parameter x"
+        },
+        {
+            "name": "dim",
+            "type": "int",
+            "desc": "Parameter dim"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom .. import runtime\nfrom ..utils import dim_compress, libentry\nfrom ..utils import triton_lang_extension as tle\n\n\n@libentry()\n@triton.jit\ndef count_nonzero_kernel_1(x_ptr, out_ptr, numel, BLOCK_SIZE: tl.constexpr):\n    pid = tle.program_id(0)\n    block_start = pid * BLOCK_SIZE\n    offsets = block_start + tl.arange(0, BLOCK_SIZE)\n    mask = offsets < numel\n    x = tl.load(x_ptr + offsets, mask=mask, other=0)\n    is_nonzero = (x != 0).to(tl.int64)\n    nonzero_count = tl.sum(is_nonzero, axis=0)\n    tl.atomic_add(out_ptr, nonzero_count)\n\n\n@libentry()\n@triton.autotune(configs=runtime.get_tuned_config(\"count_nonzero\"), key=[\"numel\"])\n@triton.jit\ndef count_nonzero_kernel(x_ptr, out_ptr, N, numel, BLOCK_SIZE: tl.constexpr):\n    pid_x = tle.program_id(0)\n\n    nonzero_count = tl.full((), value=0, dtype=out_ptr.dtype.element_ty)\n    for start_n in range(0, N, BLOCK_SIZE):\n        cols_offsets = start_n + tl.arange(0, BLOCK_SIZE)\n        offset = pid_x * N + cols_offsets\n        mask = offset < numel and cols_offsets < N\n        x = tl.load(x_ptr + offset, mask=mask, other=0)\n        is_nonzero = (x != 0).to(tl.int64)\n        nonzero_count += tl.sum(is_nonzero)\n\n    tl.store(out_ptr + pid_x, nonzero_count)\n\n\n@libentry()\n@triton.autotune(configs=runtime.get_tuned_config(\"count_nonzero\"), key=[\"numel\"])\n@triton.jit\ndef count_nonzero_combin_kernel_1(x_ptr, out_ptr, N, numel, BLOCK_SIZE: tl.constexpr):\n    pid_x = tle.program_id(0)\n    nonzero_count = tl.full((), value=0, dtype=out_ptr.dtype.element_ty)\n    for start_n in range(0, N, BLOCK_SIZE):\n        cols_offsets = start_n + tl.arange(0, BLOCK_SIZE)\n        offset = pid_x * N + cols_offsets\n        mask = offset < numel and cols_offsets < N\n        x = tl.load(x_ptr + offset, mask=mask, other=0)\n        nonzero_count += tl.sum(x)\n    tl.store(out_ptr + pid_x, nonzero_count)\n\n\n@libentry()\n@triton.jit\ndef count_nonzero_combin_kernel(\n    x_ptr, combin_ptr, N, combin_N, numel, BLOCK_SIZE: tl.constexpr\n):\n    pid_x = tle.program_id(0)\n    pid_y = tle.program_id(1)\n    cols_offsets = pid_y * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    offset = pid_x * N + cols_offsets\n    mask = offset < numel and cols_offsets < N\n    x = tl.load(x_ptr + offset, mask=mask, other=0)\n    is_nonzero = (x != 0).to(tl.int64)\n    nonzero_count = tl.sum(is_nonzero)\n    tl.store(combin_ptr + pid_x * combin_N + pid_y, nonzero_count)\n\n\ndef count_nonzero(x, dim=None):\n    if dim is not None:\n        assert dim >= -x.ndim and dim < x.ndim, \"Invalid dim\"\n        shape = x.shape\n        BLOCK_SIZE = 2048\n        numel = x.numel()\n        x = dim_compress(x, dim)\n        x = x.contiguous().flatten()\n        combin_shape = list(shape)\n        combin_shape[dim] = triton.cdiv(combin_shape[dim], BLOCK_SIZE)\n        if combin_shape[dim] != 1:\n            combin = torch.zeros(combin_shape, dtype=torch.int64, device=x.device)\n            grid = (triton.cdiv(numel, shape[dim]), combin_shape[dim], 1)\n            count_nonzero_combin_kernel[grid](\n                x, combin, shape[dim], combin_shape[dim], numel, BLOCK_SIZE\n            )\n            x = combin\n            shape = x.shape\n            numel = x.numel()\n            out_shape = list(shape)\n            del out_shape[dim]\n            out = torch.zeros(out_shape, dtype=torch.int64, device=x.device)\n            grid = lambda meta: (triton.cdiv(numel, shape[dim]),)\n            count_nonzero_combin_kernel_1[grid](x, out, shape[dim], numel)\n            return out\n        out_shape = list(shape)\n        del out_shape[dim]\n        out = torch.zeros(out_shape, dtype=torch.int64, device=x.device)\n        grid = lambda meta: (triton.cdiv(numel, shape[dim]),)\n        count_nonzero_kernel[grid](x, out, shape[dim], numel)\n        return out\n    else:\n        x = x.contiguous().flatten()\n        numel = x.numel()\n\n        out = torch.zeros(1, dtype=torch.int64, device=x.device)\n\n        BLOCK_SIZE = 1024\n        grid = lambda meta: (triton.cdiv(numel, meta[\"BLOCK_SIZE\"]),)\n\n        count_nonzero_kernel_1[grid](x, out, numel, BLOCK_SIZE=BLOCK_SIZE)\n\n        return out[0]",
+    "torch_kernel_code": "import torch\n\ndef count_nonzero(x, dim=None):\n    return torch.count_nonzero(x, dim=dim)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"count_nonzero\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_count_nonzero(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.count_nonzero(ref_x)\n    res_out = bench.triton.count_nonzero(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

@@ -1,0 +1,17 @@
+{
+    "query": "操作符名字是 where，是一个 pointwise 算子，处理硬件是 Nvidia。",
+    "kernel_name": "where",
+    "func_desc": "The where operator",
+    "func_type": "pointwise",
+    "gpu": "nvidia",
+    "input_args": [],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom ..utils import pointwise_dynamic\n\n\n@pointwise_dynamic(\n    is_tensor=[True, True, True],\n    promotion_methods=[(1, 2, \"NO_OPMATH\")],\n)\n@triton.jit\ndef where_inner(condition, self, other):\n    return tl.where(condition, self, other)\n\n\ndef where_self_out(condition, self, other, out=None):\n    result_type = torch.result_type(self, other)\n    if out is not None:\n        assert (\n            out.dtype == result_type\n        ), f\"Expected out type to be {result_type}, but got {out.dtype}.\"\n\n    c, a, b = list(\n        map(\n            lambda x: x if isinstance(x, torch.Tensor) else torch.tensor(x),\n            (condition, self, other),\n        )\n    )\n\n    if a.dtype != result_type:\n        a = a.to(result_type)\n    if b.dtype != result_type:\n        b = b.to(result_type)\n\n    devices = map(lambda x: x.device, (c, a, b))\n    devices = list(filter(lambda k: k.type != \"cpu\", devices))\n\n    assert len(devices), \"CPU only. There seems a mistake to dispatch to here.\"\n\n    device = devices[0]\n    if c.device != device and c.ndim == 0:\n        c = c.to(device)\n    if a.device != device and a.ndim == 0:\n        a = a.to(device)\n    if b.device != device and b.ndim == 0:\n        b = b.to(device)\n\n    assert (\n        len(set(devices)) == 1\n    ), f\"Expected all tensors to be on the same device, but found at least two devices, {devices}\"\n    assert (\n        c.dtype == torch.bool\n    ), f\"where expected condition to be a boolean tensor, but got a tensor with dtype {condition.dtype}\"\n\n    if out is None:\n        out_shape = torch.broadcast_shapes(c.shape, a.shape, b.shape)\n        out = torch.empty(out_shape, dtype=result_type, device=device)\n\n    ndim = max(c.ndim, a.ndim, b.ndim)\n    where_inner.instantiate(ndim)\n    where_inner(c, a, b, out0=out)\n    return out\n\n\ndef where_self(condition, self, other):\n    return where_self_out(condition, self, other)\n\n\ndef where_scalar_self(condition, self, other):\n    return where_self_out(condition, self, other)\n\n\ndef where_scalar_other(condition, self, other):\n    return where_self_out(condition, self, other)",
+    "torch_kernel_code": "import torch\n\ndef where(input):\n    return torch.where(condition, x, y)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"where\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_where(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.where(ref_x)\n    res_out = bench.triton.where(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

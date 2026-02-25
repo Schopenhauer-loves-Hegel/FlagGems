@@ -1,0 +1,33 @@
+{
+    "query": "操作符名字是 log_softmax，是一个 normalization 算子，处理硬件是 Nvidia。",
+    "kernel_name": "log_softmax",
+    "func_desc": "The log_softmax operator",
+    "func_type": "normalization",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "self",
+            "type": "Any",
+            "desc": "Parameter self"
+        },
+        {
+            "name": "dim",
+            "type": "int",
+            "desc": "Parameter dim"
+        },
+        {
+            "name": "half_to_float",
+            "type": "bool",
+            "desc": "Parameter half_to_float"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems import runtime\nfrom flag_gems.runtime import torch_device_fn\nfrom flag_gems.utils import libentry\nfrom flag_gems.utils import triton_lang_extension as tle\n\nlogger = logging.getLogger(__name__)\n\n\n@libentry()\n@triton.jit\ndef log_softmax_kernel(\n    output_ptr,\n    input_ptr,\n    M,\n    N,\n    K,\n    BLOCK_M: tl.constexpr = 8,\n    BLOCK_N: tl.constexpr = 256,\n):\n    pid_m = tle.program_id(0)\n    pid_k = tle.program_id(1)\n    m_offset = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)\n\n    # TODO(chenfeiyu): consider float64 add add a utility function to get accumulator type\n    m = tl.full([BLOCK_M, BLOCK_N], value=float(\"-inf\"), dtype=tl.float32)\n    z = tl.full([BLOCK_M, BLOCK_N], value=0.0, dtype=tl.float32)\n    for start_n in range(0, N, BLOCK_N):\n        n_offset = start_n + tl.arange(0, BLOCK_N)\n        offset = m_offset[:, None] * N * K + n_offset[None, :] * K + pid_k\n        mask = m_offset[:, None] < M and n_offset[None, :] < N\n        input_ptrs = input_ptr + offset\n        inp = tl.load(input_ptrs, mask=mask, other=-float(\"inf\")).to(tl.float32)\n        m_new = tl.maximum(inp, m)\n        all_neg_inf = m_new == float(\"-inf\")\n        z = tl.where(all_neg_inf, z, z * tl.exp(m - m_new) + tl.exp(inp - m_new))\n        m = m_new\n\n    m_reduced = tl.max(m, 1)\n    z = tl.sum(z * tl.exp(m - m_reduced[:, None]), 1)\n    m = m_reduced\n\n    for start_n in range(0, N, BLOCK_N):\n        n_offset = start_n + tl.arange(0, BLOCK_N)\n        offset = m_offset[:, None] * N * K + n_offset[None, :] * K + pid_k\n        mask = m_offset[:, None] < M and n_offset[None, :] < N\n        input_ptrs = input_ptr + offset\n        inp = tl.load(input_ptrs, mask=mask, other=-float(\"inf\")).to(tl.float32)\n        o = inp - m[:, None] - tl.log(z[:, None])\n        tl.store(output_ptr + offset, o, mask=mask)\n\n\n@libentry()\n@triton.autotune(configs=runtime.get_tuned_config(\"log_softmax\"), key=[\"M\", \"N\"])\n@triton.jit\ndef log_softmax_backward_kernel(\n    out_ptr,\n    out_grad_ptr,\n    in_grad_ptr,\n    M,\n    N,\n    K,\n    BLOCK_M: tl.constexpr,\n    BLOCK_N: tl.constexpr,\n):\n    pid_m = tle.program_id(0)\n    pid_k = tle.program_id(1)\n    m_offset = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)\n\n    scale = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)\n    for start_n in range(0, N, BLOCK_N):\n        n_offset = start_n + tl.arange(0, BLOCK_N)\n        offsets = m_offset[:, None] * N * K + n_offset[None, :] * K + pid_k\n        mask = m_offset[:, None] < M and n_offset[None, :] < N\n        out_grad_ptrs = out_grad_ptr + offsets\n        out_grad = tl.load(out_grad_ptrs, mask=mask).to(tl.float32)\n        scale += out_grad\n    scale = tl.sum(scale, 1)\n\n    for start_n in range(0, N, BLOCK_N):\n        n_offset = start_n + tl.arange(0, BLOCK_N)\n        offsets = m_offset[:, None] * N * K + n_offset[None, :] * K + pid_k\n        mask = m_offset[:, None] < M and n_offset[None, :] < N\n        out_ptrs = out_ptr + offsets\n        out = tl.load(out_ptrs, mask=mask).to(tl.float32)\n        out_grad_ptrs = out_grad_ptr + offsets\n        out_grad = tl.load(out_grad_ptrs, mask=mask).to(tl.float32)\n        in_grad = out_grad - tl.exp(out) * scale[:, None]\n        in_grad_ptrs = in_grad_ptr + offsets\n        tl.store(in_grad_ptrs, in_grad, mask=mask)\n\n\ndef log_softmax(self, dim, half_to_float=False):\n    logger.debug(\"GEMS LOG_SOFTMAX\")\n\n    assert dim >= -self.ndim and dim < self.ndim, \"Invalid dim\"\n    dim = dim % self.ndim\n    M = 1\n    N = self.shape[dim]\n    for i in range(dim):\n        M *= self.shape[i]\n    inp = self.contiguous()\n    if half_to_float:\n        dtype = torch.float32\n    else:\n        dtype = self.dtype\n    out = torch.empty_like(inp, dtype=dtype)\n    K = inp.numel() // M // N\n\n    grid = lambda meta: (\n        triton.cdiv(M, meta[\"BLOCK_M\"]),\n        K,\n    )\n    with torch_device_fn.device(inp.device):\n        log_softmax_kernel[grid](\n            out,\n            inp,\n            M,\n            N,\n            K,\n            num_warps=8,\n        )\n    return out\n\n\ndef log_softmax_backward(grad_output, output, dim, input_dtype):\n    logger.debug(\"GEMS LOG_SOFTMAX VJP\")\n\n    assert dim >= -output.ndim and dim < output.ndim, \"Invalid dim\"\n    dim = dim % output.ndim\n    M = 1\n    N = output.shape[dim]\n    for i in range(dim):\n        M *= output.shape[i]\n\n    grad_output = grad_output.contiguous()\n    in_grad = torch.empty_like(output, dtype=input_dtype)\n    K = output.numel() // M // N\n\n    grid = lambda meta: (\n        triton.cdiv(M, meta[\"BLOCK_M\"]),\n        K,\n    )\n    with torch_device_fn.device(in_grad.device):\n        log_softmax_backward_kernel[grid](\n            output,\n            grad_output,\n            in_grad,\n            M,\n            N,\n            K,\n        )\n    return in_grad",
+    "torch_kernel_code": "import torch\n\ndef log_softmax(self, dim, half_to_float=False):\n    return torch.log_softmax(self, dim=dim)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"log_softmax\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_log_softmax(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.log_softmax(ref_x)\n    res_out = bench.triton.log_softmax(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

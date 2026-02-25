@@ -1,0 +1,17 @@
+{
+    "query": "操作符名字是 bitwise_or，是一个 pointwise 算子，处理硬件是 Nvidia。",
+    "kernel_name": "bitwise_or",
+    "func_desc": "The bitwise_or operator",
+    "func_type": "pointwise",
+    "gpu": "nvidia",
+    "input_args": [],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport triton\n\nfrom flag_gems.utils import pointwise_dynamic\n\nlogger = logging.getLogger(__name__)\n\n\n@pointwise_dynamic(promotion_methods=[(0, 1, \"DEFAULT\")])\n@triton.jit\ndef bitwise_or_func(x, y):\n    return x | y\n\n\ndef bitwise_or_tensor(A, B):\n    logger.debug(\"GEMS BITWISE OR\")\n    return bitwise_or_func(A, B)\n\n\ndef bitwise_or_tensor_(A, B):\n    logger.debug(\"GEMS BITWISE OR_\")\n    return bitwise_or_func(A, B, out0=A)\n\n\n@pointwise_dynamic(is_tensor=[True, False], promotion_methods=[(0, 1, \"DEFAULT\")])\n@triton.jit\ndef bitwise_or_func_scalar(x, y):\n    return x | y\n\n\ndef bitwise_or_scalar(A, B):\n    logger.debug(\"GEMS BITWISE OR SCALAR\")\n    return bitwise_or_func_scalar(A, B)\n\n\ndef bitwise_or_scalar_(A, B):\n    logger.debug(\"GEMS BITWISE OR_ SCALAR\")\n    return bitwise_or_func_scalar(A, B, out0=A)\n\n\ndef bitwise_or_scalar_tensor(A, B):\n    logger.debug(\"GEMS BITWISE OR SCALAR TENSOR\")\n    return bitwise_or_func_scalar(B, A)",
+    "torch_kernel_code": "import torch\n\ndef bitwise_or(input):\n    return torch.bitwise_or(input, other)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"bitwise_or\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_bitwise_or(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.bitwise_or(ref_x)\n    res_out = bench.triton.bitwise_or(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

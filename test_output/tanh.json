@@ -1,0 +1,23 @@
+{
+    "query": "操作符名字是 tanh，是一个 pointwise 算子，处理硬件是 Nvidia。",
+    "kernel_name": "tanh",
+    "func_desc": "The tanh operator",
+    "func_type": "pointwise",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "A",
+            "type": "Any",
+            "desc": "Parameter A"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom ..utils import pointwise_dynamic, tl_extra_shim\n\npow = tl_extra_shim.pow\n_tanh = tl_extra_shim.tanh\n\n\n@pointwise_dynamic(promotion_methods=[(0, \"INT_TO_FLOAT\")])\n@triton.jit\ndef tanh_forward(x):\n    return _tanh(x.to(tl.float32))\n\n\n@pointwise_dynamic(promotion_methods=[(0, \"INT_TO_FLOAT\")])\n@triton.jit\ndef tanh_backward(y, dy):\n    return dy * (1.0 - pow(y.to(tl.float32), 2))\n\n\nclass Tanh(torch.autograd.Function):\n    @staticmethod\n    def forward(ctx, A):\n        if A.requires_grad is True:\n            out = tanh_forward(A.to(torch.float32))\n            ctx.save_for_backward(out)\n            return out.to(A.dtype)\n        else:\n            out = tanh_forward(A)\n            return out\n\n    @staticmethod\n    def backward(ctx, out_grad):\n        (out,) = ctx.saved_tensors\n        in_grad = tanh_backward(out, out_grad)\n        return in_grad\n\n\ndef tanh(A):\n    return Tanh.apply(A)\n\n\nclass InplaceTanh(torch.autograd.Function):\n    @staticmethod\n    def forward(ctx, A):\n        if A.requires_grad is True:\n            out = tanh_forward(A.to(torch.float32))\n            ctx.save_for_backward(out)\n            A.copy_(out.to(A.dtype))\n            ctx.mark_dirty(A)\n        else:\n            tanh_forward(A, out0=A)\n        return A\n\n    @staticmethod\n    def backward(ctx, out_grad):\n        (out,) = ctx.saved_tensors\n        in_grad = tanh_backward(out, out_grad)\n        return in_grad\n\n\ndef tanh_(A):\n    InplaceTanh.apply(A)\n    return A",
+    "torch_kernel_code": "import torch\n\ndef tanh(A):\n    return torch.tanh(input)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"tanh\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_tanh(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.tanh(ref_x)\n    res_out = bench.triton.tanh(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

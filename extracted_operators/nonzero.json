@@ -1,0 +1,28 @@
+{
+    "query": "操作符名字是 nonzero，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "nonzero",
+    "func_desc": "The nonzero operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "as_tuple",
+            "type": "bool",
+            "desc": "Parameter as_tuple"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems import runtime\nfrom flag_gems.runtime import torch_device_fn\nfrom flag_gems.utils import libentry\nfrom flag_gems.utils import triton_lang_extension as tle\n\nlogger = logging.getLogger(__name__)\n\n\n@libentry()\n@triton.heuristics(runtime.get_heuristic_config(\"elementwise_generic\"))\n@triton.jit\ndef nonzero_kernel(\n    inp,\n    prefix_sum,\n    out,\n    n_elements,\n    shape,\n    ndim: tl.constexpr,\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tle.program_id(0)\n\n    offset = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    mask = offset < n_elements\n\n    inp_vals = tl.load(inp + offset, mask=mask).to(tl.int1)\n    out_offset = tl.load(prefix_sum + offset, mask=mask) - 1\n\n    nonzero_mask = mask and inp_vals  # noqa\n\n    idx_flat = offset\n    for dim in range(ndim - 1, -1, -1):\n        dim_size = tl.load(shape + dim)\n        remainder = idx_flat % dim_size\n        idx_flat //= dim_size\n        tl.store(out + out_offset * ndim + dim, remainder, mask=nonzero_mask)\n\n\ndef nonzero(inp, *, as_tuple=False):\n    logger.debug(\"GEMS NONZERO\")\n\n    inp_ndim = inp.ndim\n\n    inp = inp.contiguous()\n    n_elements = inp.numel()\n    inp_view = inp.view(n_elements)\n\n    shape = torch.tensor(inp.shape, dtype=torch.int32, device=inp.device)\n\n    inp_bool = inp_view\n    if inp_view.dtype != torch.bool:\n        inp_bool = inp_view != 0\n\n    prefix_sum = inp_bool.cumsum(axis=0)\n\n    num_nonzeros = n_elements\n    out = torch.empty(num_nonzeros, inp_ndim, dtype=torch.int64, device=inp.device)\n\n    grid = lambda meta: (triton.cdiv(n_elements, meta[\"BLOCK_SIZE\"]),)\n    with torch_device_fn.device(inp.device):\n        nonzero_kernel[grid](inp_bool, prefix_sum, out, n_elements, shape, inp_ndim)\n\n    num_nonzeros = prefix_sum[n_elements - 1].item()\n    out = out[0:num_nonzeros]\n\n    if as_tuple:\n        return torch.unbind(out, dim=0)\n    else:\n        return out",
+    "torch_kernel_code": "import torch\n\ndef nonzero(inp, *, as_tuple=False):\n    return torch.nonzero(inp, as_tuple)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"nonzero\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_nonzero(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.nonzero(ref_x)\n    res_out = bench.triton.nonzero(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

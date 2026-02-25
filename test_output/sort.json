@@ -1,0 +1,33 @@
+{
+    "query": "操作符名字是 sort，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "sort",
+    "func_desc": "The sort operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "dim",
+            "type": "int",
+            "desc": "Parameter dim"
+        },
+        {
+            "name": "descending",
+            "type": "bool",
+            "desc": "Parameter descending"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\nimport math\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom ..runtime import torch_device_fn\nfrom ..utils import libentry\nfrom .topk import _get_finfo_val, _get_iinfo_val, argsort\n\n\n@libentry()\n@triton.jit()\ndef sort_kernel(\n    in_ptr,\n    out_ptr,\n    out_index_ptr,\n    N: tl.constexpr,\n    BLOCK_SIZE: tl.constexpr,\n    DESCENDING: tl.constexpr,\n    IS_FLOAT: tl.constexpr,\n):\n    cols = tl.arange(0, BLOCK_SIZE)\n    mask = cols < N\n    offset = tl.program_id(0) * N + cols\n    in_ptr += offset\n    out_ptr += offset\n    out_index_ptr += offset\n\n    if IS_FLOAT:\n        mask_val = _get_finfo_val(in_ptr.dtype.element_ty, return_max=not DESCENDING)\n        in_val = tl.load(in_ptr, mask=mask, other=mask_val)\n        in_val = tl.where(in_val.dtype.is_fp64(), in_val, in_val.to(tl.float32))\n    else:\n        mask_val = _get_iinfo_val(in_ptr.dtype.element_ty, return_max=not DESCENDING)\n        in_val = tl.load(in_ptr, mask=mask, other=mask_val).to(tl.int32)\n    index_val = tl.arange(0, BLOCK_SIZE)\n\n    sorted_in_val, sorted_index_val = argsort(\n        in_val, index_val, 0, descending=DESCENDING\n    )\n    tl.store(out_ptr, sorted_in_val, mask=mask)\n    tl.store(out_index_ptr, sorted_index_val, mask=mask)\n\n\ndef sort(inp, dim=-1, descending=False):\n    sort_elem_cnt = inp.shape[dim]\n    if sort_elem_cnt == 1:\n        return inp, torch.zeros_like(inp, dtype=torch.int64)\n    elif sort_elem_cnt > 512:  # TODO: Optimize implementation for large cases.\n        return torch.sort(inp, stable=False, dim=dim, descending=descending)\n    block_size = triton.next_power_of_2(sort_elem_cnt)\n\n    if dim < 0:\n        dim = dim + inp.ndim\n    if dim != inp.ndim - 1:\n        inp = torch.movedim(inp, dim, -1).contiguous()\n    else:\n        inp = inp.contiguous()\n    batch_size = math.prod(inp.shape) // sort_elem_cnt\n\n    out = torch.empty_like(inp)\n    out_index = torch.empty_like(inp, dtype=torch.int64)\n\n    with torch_device_fn.device(inp.device):\n        sort_kernel[batch_size,](\n            inp,\n            out,\n            out_index,\n            N=sort_elem_cnt,\n            BLOCK_SIZE=block_size,\n            DESCENDING=descending,\n            IS_FLOAT=inp.is_floating_point(),\n            num_warps=4,\n        )\n\n    if dim != inp.ndim - 1:\n        out = torch.movedim(out, -1, dim)\n        out_index = torch.movedim(out_index, -1, dim)\n    return out, out_index",
+    "torch_kernel_code": "import torch\n\ndef sort(inp, dim=-1, descending=False):\n    return torch.sort(inp, dim=dim, descending=descending)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"sort\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_sort(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.sort(ref_x)\n    res_out = bench.triton.sort(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

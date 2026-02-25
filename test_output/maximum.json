@@ -1,0 +1,28 @@
+{
+    "query": "操作符名字是 maximum，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "maximum",
+    "func_desc": "The maximum operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "X",
+            "type": "torch.Tensor",
+            "desc": "Parameter X"
+        },
+        {
+            "name": "Y",
+            "type": "torch.Tensor",
+            "desc": "Parameter Y"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport triton\nimport triton.language as tl\n\nfrom ..runtime import device\nfrom ..utils import pointwise_dynamic\n\ndevice = device.name\n\n\n@pointwise_dynamic(is_tensor=[True, True], promotion_methods=[(0, 1, \"DEFAULT\")])\n@triton.jit\ndef maximum_kernel(X, Y):\n    if X.dtype == tl.bfloat16:\n        X = X.to(tl.float32)\n        Y = Y.to(tl.float32)\n\n    return tl.maximum(X, Y)\n\n\ndef maximum(X, Y):\n    assert X.device.type == device and Y.device.type == device\n    return maximum_kernel(X, Y)",
+    "torch_kernel_code": "import torch\n\ndef maximum(X, Y):\n    return torch.maximum(X, Y)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"maximum\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_maximum(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.maximum(ref_x)\n    res_out = bench.triton.maximum(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

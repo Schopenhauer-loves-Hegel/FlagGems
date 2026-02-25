@@ -1,0 +1,23 @@
+{
+    "query": "操作符名字是 sigmoid，是一个 pointwise 算子，处理硬件是 Nvidia。",
+    "kernel_name": "sigmoid",
+    "func_desc": "The sigmoid operator",
+    "func_type": "pointwise",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "A",
+            "type": "Any",
+            "desc": "Parameter A"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom ..utils import pointwise_dynamic, tl_extra_shim\n\nexp2 = tl_extra_shim.exp2\n\n\n@pointwise_dynamic(promotion_methods=[(0, \"INT_TO_FLOAT\")])\n@triton.jit\ndef sigmoid_forward(x):\n    # log2e: tl.constexpr = math.log2(math.e)\n    # triton 3.0.0 disallow calling non-jitted function inside jitted function, even if it is in\n    # the rhs of an assignment to a constexpr, so we use numeric literal instead to work around this.\n    log2e: tl.constexpr = 1.4426950408889634\n    return 1 / (1 + exp2(-x.to(tl.float32) * log2e))\n\n\n@pointwise_dynamic(promotion_methods=[(0, \"INT_TO_FLOAT\")])\n@triton.jit\ndef sigmoid_backward(y, dy):\n    y_f32 = y.to(tl.float32)\n    dy_f32 = dy.to(tl.float32)\n    return dy_f32 * (1.0 - y_f32) * y_f32\n\n\nclass Sigmoid(torch.autograd.Function):\n    @staticmethod\n    def forward(ctx, A):\n        if A.requires_grad is True:\n            out = sigmoid_forward(A.to(torch.float32))\n            ctx.save_for_backward(out)\n            return out.to(A.dtype)\n        else:\n            out = sigmoid_forward(A)\n            return out\n\n    @staticmethod\n    def backward(ctx, out_grad):\n        (out,) = ctx.saved_tensors\n        in_grad = sigmoid_backward(out, out_grad)\n        return in_grad\n\n\ndef sigmoid(A):\n    return Sigmoid.apply(A)\n\n\nclass InplaceSigmoid(torch.autograd.Function):\n    @staticmethod\n    def forward(ctx, A):\n        if A.requires_grad is True:\n            out = sigmoid_forward(A.to(torch.float32))\n            ctx.save_for_backward(out)\n            A.copy_(out.to(A.dtype))\n        else:\n            sigmoid_forward(A, out0=A)\n        ctx.mark_dirty(A)\n        return A\n\n    @staticmethod\n    def backward(ctx, out_grad):\n        (out,) = ctx.saved_tensors\n        in_grad = sigmoid_backward(out, out_grad)\n        return in_grad\n\n\ndef sigmoid_(A):\n    return InplaceSigmoid.apply(A)",
+    "torch_kernel_code": "import torch\n\ndef sigmoid(A):\n    return torch.sigmoid(input)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"sigmoid\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_sigmoid(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.sigmoid(ref_x)\n    res_out = bench.triton.sigmoid(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

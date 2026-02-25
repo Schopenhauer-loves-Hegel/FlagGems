@@ -1,0 +1,17 @@
+{
+    "query": "操作符名字是 stack，是一个 tensor_ops 算子，处理硬件是 Nvidia。",
+    "kernel_name": "stack",
+    "func_desc": "The stack operator",
+    "func_type": "tensor_ops",
+    "gpu": "nvidia",
+    "input_args": [],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import itertools\nimport logging\nfrom typing import List, Tuple, Union\n\nimport torch\nimport triton\n\nfrom ..utils import pointwise_dynamic\nfrom ..utils.tensor_wrapper import StridedBuffer\n\n\n@pointwise_dynamic(is_tensor=[True], promotion_methods=[(0, \"DEFAULT\")])\n@triton.jit\ndef copy_func(x):\n    return x\n\n\ndef stack(\n    tensors: Union[Tuple[torch.Tensor, ...], List[torch.Tensor]], dim: int = 0\n) -> torch.Tensor:\n\n    if len(tensors) == 0:\n        raise RuntimeError(\"stack expected a non-empty TensorList\")\n\n    inp_shapes = [list(_.shape) for _ in tensors]\n    inp0_shape = inp_shapes[0]\n    for i, s in enumerate(inp_shapes[1:]):\n        if (dim < -tensors[i + 1].dim() - 1) or (dim > tensors[i + 1].dim()):\n            raise IndexError(\n                \"Dimension out of range (expected to be in range of [{}, {}], but got {})\".format(\n                    -tensors[i + 1].dim() - 1, tensors[i + 1].dim(), dim\n                )\n            )\n        if s != inp0_shape:\n            raise RuntimeError(\n                f\"stack expects each tensor to be equal size, but got {inp0_shape} at entry 0 and {s} at entry {i+1}\"\n            )\n\n    if dim < 0:\n        dim = dim + len(inp0_shape) + 1\n\n    in0_shape = inp0_shape[:dim] + [1] + inp0_shape[dim:]\n    out_shape = inp0_shape[:dim] + [len(tensors)] + inp0_shape[dim:]\n    out0 = torch.empty(out_shape, dtype=tensors[0].dtype, device=tensors[0].device)\n    out0_strides = out0.stride()\n    out0_offsets = list(\n        itertools.accumulate([out0_strides[dim] for _ in inp_shapes[:-1]], initial=0)\n    )\n\n    for a, out0_offset in zip(tensors, out0_offsets):\n        a = a.reshape(in0_shape)\n        in_view = StridedBuffer(a, in0_shape, a.stride())\n        out_view = StridedBuffer(out0, in0_shape, out0.stride(), offset=out0_offset)\n        copy_func.instantiate(a.ndim)(in_view, out0=out_view)\n\n    return out0",
+    "torch_kernel_code": "import torch\n\ndef stack(*args, **kwargs):\n    return torch.stack(tensors, dim=dim)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"stack\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_stack(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.stack(ref_x)\n    res_out = bench.triton.stack(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

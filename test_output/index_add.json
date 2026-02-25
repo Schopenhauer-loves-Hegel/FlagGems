@@ -1,0 +1,43 @@
+{
+    "query": "操作符名字是 index_add，是一个 indexing 算子，处理硬件是 Nvidia。",
+    "kernel_name": "index_add",
+    "func_desc": "The index_add operator",
+    "func_type": "indexing",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "dim",
+            "type": "int",
+            "desc": "Parameter dim"
+        },
+        {
+            "name": "index",
+            "type": "torch.Tensor",
+            "desc": "Parameter index"
+        },
+        {
+            "name": "src",
+            "type": "Any",
+            "desc": "Parameter src"
+        },
+        {
+            "name": "alpha",
+            "type": "float",
+            "desc": "Parameter alpha"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom ..runtime import backend\nfrom ..utils import dim_compress, libentry\n\ndevice = backend.device_name\n\n\ndef cfggen():\n    block_m = [1, 2, 4]\n    block_n = [128, 1024, 2048, 4096]\n    configs = [\n        triton.Config({\"BLOCK_M\": m, \"BLOCK_N\": n}, num_warps=4)\n        for m in block_m\n        for n in block_n\n    ]\n    return configs\n\n\n@libentry()\n@triton.autotune(configs=cfggen(), key=[\"M\", \"N\"])\n@triton.jit\ndef index_add_kernel(\n    inp,\n    out,\n    index,\n    src,\n    M,\n    N,\n    alpha,\n    inp_len,\n    BLOCK_M: tl.constexpr,\n    BLOCK_N: tl.constexpr,\n):\n    pid_x = tl.program_id(axis=0)\n    pid_y = tl.program_id(axis=1)\n    rows_offsets = pid_x * BLOCK_M + tl.arange(0, BLOCK_M)[:, None]\n    cols_offsets = pid_y * BLOCK_N + tl.arange(0, BLOCK_N)\n\n    rows_mask = rows_offsets < M\n    index_mask = cols_offsets < N\n    block_mask = rows_mask and index_mask\n\n    cur_indices = tl.load(index + cols_offsets, mask=index_mask, other=0)\n    inp_off = rows_offsets * inp_len + cur_indices[None, :]\n    cur_inp = tl.load(inp + inp_off, mask=block_mask, other=0.0)\n    src_off = rows_offsets * N + cols_offsets[None, :]\n    cur_src = tl.load(src + src_off, mask=block_mask, other=0.0)\n    cur_inp += alpha * cur_src\n\n    tl.store(out + inp_off, cur_inp, mask=block_mask)\n\n\ndef index_add(inp, dim, index, src, alpha=1):\n    assert ((0 <= index) * (index < inp.size(dim))).equal(\n        torch.ones(tuple(index.shape), dtype=torch.bool, device=device)\n    ), \"0 <= index < self.size(dim)\"\n    assert dim >= -inp.ndim and dim < inp.ndim, \"Invalid dim\"\n    assert index.numel() == src.size(\n        dim\n    ), \"The dimth dimension of source must have the same size as the length of index\"\n    assert (\n        inp.ndim == src.ndim\n    ), \"Self and source should have the same number of dimensions\"\n    assert (\n        ((inp.size(i) == src.size(i)) or i == dim) for i in range(0, inp.ndim)\n    ), \"src.size(d) == self.size(d) for all dimensions d != dim\"\n\n    inp = inp.contiguous()\n    index = index.contiguous()\n    src = src.contiguous()\n\n    dim = dim % inp.ndim\n    inp_len = inp.size(dim)\n    N = index.numel()\n    M = src.numel() // N\n    fine_dim = inp.ndim - 1\n    if dim != fine_dim:\n        inp = dim_compress(inp, dim)\n        src = dim_compress(src, dim)\n    out = inp.clone()\n\n    grid = lambda meta: (\n        triton.cdiv(M, meta[\"BLOCK_M\"]),\n        triton.cdiv(N, meta[\"BLOCK_N\"]),\n    )\n    index_add_kernel[grid](inp, out, index, src, M, N, alpha, inp_len)\n    if dim != fine_dim:\n        order = [i for i in range(out.ndim - 1)]\n        order.insert(dim, fine_dim)\n        return out.permute(order).contiguous()\n    else:\n        return out",
+    "torch_kernel_code": "import torch\n\ndef index_add(inp, dim, index, src, alpha=1):\n    return torch.index_add(input, dim, index, source)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"index_add\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_index_add(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.index_add(ref_x)\n    res_out = bench.triton.index_add(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

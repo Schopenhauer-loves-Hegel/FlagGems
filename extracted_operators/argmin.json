@@ -1,0 +1,38 @@
+{
+    "query": "操作符名字是 argmin，是一个 reduction 算子，处理硬件是 Nvidia。",
+    "kernel_name": "argmin",
+    "func_desc": "The argmin operator",
+    "func_type": "reduction",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "dim",
+            "type": "int",
+            "desc": "Parameter dim"
+        },
+        {
+            "name": "keepdim",
+            "type": "int",
+            "desc": "Parameter keepdim"
+        },
+        {
+            "name": "dtype",
+            "type": "torch.Tensor",
+            "desc": "Parameter dtype"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\nimport math\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems import runtime\nfrom flag_gems.runtime import torch_device_fn\nfrom flag_gems.utils import libentry\nfrom flag_gems.utils import triton_lang_extension as tle\nfrom flag_gems.utils.limits import get_dtype_max\n\nlogger = logging.getLogger(__name__)\n\n\n@libentry()\n@triton.jit\ndef argmin_kernel_1(\n    inp,\n    mid_value,\n    mid_index,\n    M,\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tle.program_id(0)\n    offset = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    inp_ptrs = inp + offset\n    mask = offset < M\n\n    max_value = get_dtype_max(inp.type.element_ty)\n    inp_val = tl.load(inp_ptrs, mask=mask, other=max_value)\n    min_val, min_index = tl.min(inp_val, axis=0, return_indices=True)\n    min_index = min_index + pid * BLOCK_SIZE\n    mid_value_ptr = mid_value + pid\n    min_index_ptr = mid_index + pid\n    tl.store(mid_value_ptr, min_val)\n    tl.store(min_index_ptr, min_index)\n\n\n@libentry()\n@triton.jit\ndef argmin_kernel_2(\n    mid_value,\n    mid_index,\n    out,\n    mid_size,\n    BLOCK_MID: tl.constexpr,\n):\n    offset = tl.arange(0, BLOCK_MID)\n    mid_ptrs = mid_value + offset\n    mask = offset < mid_size\n    max_value = get_dtype_max(mid_value.type.element_ty)\n    mid_val = tl.load(mid_ptrs, mask=mask, other=max_value)\n    index_val = tl.argmin(mid_val, axis=0)\n    mid_index_ptrs = mid_index + index_val\n    out_val = tl.load(mid_index_ptrs)\n    tl.store(out, out_val)\n\n\ndef heur_block_n(args):\n    return min(4096, triton.next_power_of_2(args[\"N\"]))\n\n\n@libentry()\n@triton.heuristics(runtime.get_heuristic_config(\"argmin\"))\n@triton.jit\ndef argmin_kernel(\n    inp,\n    out_index,\n    M,\n    N,\n    K,\n    BLOCK_M: tl.constexpr,\n    BLOCK_N: tl.constexpr,\n):\n    # set offset\n    pid_m = tle.program_id(0)\n    pid_k = tle.program_id(1)\n    m_offset = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)\n\n    dtype = inp.type.element_ty\n    acc_type = tl.float32 if dtype is tl.bfloat16 else dtype\n    max_value = get_dtype_max(dtype)\n    min_values = tl.full([BLOCK_M], dtype=acc_type, value=max_value)\n    argmin_values = tl.full([BLOCK_M], dtype=tl.int64, value=0)\n    for start_n in range(0, N, BLOCK_N):\n        n_offset = start_n + tl.arange(0, BLOCK_N)\n        offset = m_offset[:, None] * N * K + n_offset[None, :] * K + pid_k\n        mask = m_offset[:, None] < M and n_offset[None, :] < N\n        inp_ptrs = inp + offset\n        inp_vals = tl.load(inp_ptrs, mask=mask, other=max_value)\n        # tl.bfloat is promoted to tl.float32 by tl.min\n        local_min, local_argmin = tl.min(\n            inp_vals, 1, return_indices=True, return_indices_tie_break_left=True\n        )\n        # if return indices is not supported, call a tl.argmin in addition\n        # local_argmin = tl.argmin(inp_vals, 1)\n        update = local_min < min_values\n        min_values = tl.where(update, local_min, min_values)\n        argmin_values = tl.where(update, start_n + local_argmin, argmin_values)\n\n    offset_index = m_offset * K + pid_k\n    out_index_ptrs = out_index + offset_index\n    mask1 = m_offset < M\n    tl.store(out_index_ptrs, argmin_values, mask=mask1)\n\n\ndef argmin(inp, dim=None, keepdim=False, *, dtype=None):\n    logger.debug(\"GEMS ARGMIN\")\n    if dim is None:\n        M = inp.numel()\n        if dtype is None:\n            dtype = inp.dtype\n        block_size = triton.next_power_of_2(math.ceil(math.sqrt(M)))\n        mid_size = triton.cdiv(M, block_size)\n        block_mid = triton.next_power_of_2(mid_size)\n\n        mid_value = torch.empty((mid_size,), dtype=dtype, device=inp.device)\n        mid_index = torch.empty((mid_size,), dtype=torch.int64, device=inp.device)\n        if keepdim:\n            shape = list(inp.shape)\n            for i in range(0, inp.dim()):\n                shape[i] = 1\n            out = torch.empty(shape, dtype=torch.int64, device=inp.device)\n        else:\n            out = torch.empty([], dtype=torch.int64, device=inp.device)\n\n        with torch_device_fn.device(inp.device):\n            argmin_kernel_1[(mid_size, 1, 1)](\n                inp,\n                mid_value,\n                mid_index,\n                M,\n                block_size,\n            )\n            argmin_kernel_2[(1, 1, 1)](\n                mid_value,\n                mid_index,\n                out,\n                mid_size,\n                block_mid,\n            )\n        return out\n    else:\n        assert dim >= -inp.ndim and dim < inp.ndim, \"Invalid dim\"\n        shape = inp.shape\n        dim = dim % inp.ndim\n        N = shape[dim]\n        M = math.prod(shape[:dim])\n        K = inp.numel() // M // N\n\n        inp = inp.contiguous()\n\n        shape_list = list(shape)\n        shape_list[dim] = 1\n        out_index = torch.empty(shape_list, dtype=torch.int64, device=inp.device)\n        if not keepdim:\n            out_index = torch.squeeze(out_index, dim)\n\n        grid = lambda meta: (\n            triton.cdiv(M, meta[\"BLOCK_M\"]),\n            K,\n        )\n        with torch_device_fn.device(inp.device):\n            argmin_kernel[grid](\n                inp,\n                out_index,\n                M,\n                N,\n                K,\n            )\n\n        return out_index",
+    "torch_kernel_code": "import torch\n\ndef argmin(inp, dim=None, keepdim=False, *, dtype=None):\n    return torch.argmin(inp, dim=dim, keepdim=keepdim)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"argmin\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_argmin(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.argmin(ref_x)\n    res_out = bench.triton.argmin(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

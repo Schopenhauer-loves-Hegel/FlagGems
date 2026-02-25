@@ -1,0 +1,28 @@
+{
+    "query": "操作符名字是 outer，是一个 blas 算子，处理硬件是 Nvidia。",
+    "kernel_name": "outer",
+    "func_desc": "The outer operator",
+    "func_type": "blas",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "weight",
+            "type": "torch.Tensor",
+            "desc": "Parameter weight"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\n\nfrom .mul import mul\nfrom .mv import mv\n\n\nclass Outer(torch.autograd.Function):\n    @staticmethod\n    def forward(ctx, inp, weight):\n        assert inp.ndim == 1 and weight.ndim == 1, \"Invalid input\"\n        inp1 = inp[:, None]\n        weight1 = weight[None, :]\n        inp1 = inp1.contiguous()\n        weight1 = weight1.contiguous()\n        out = mul(inp1, weight1)\n        ctx.save_for_backward(inp, weight)\n        return out\n\n    @staticmethod\n    def backward(ctx, out_grad):\n        assert out_grad.ndim == 2, \"invalide out_grad shape\"\n\n        inp, weight = ctx.saved_tensors\n\n        inp_grad = mv(out_grad, weight)\n        weight_grad = mv(out_grad.t(), inp)\n\n        return inp_grad, weight_grad\n\n\ndef outer(inp, weight):\n    return Outer.apply(inp, weight)",
+    "torch_kernel_code": "import torch\n\ndef outer(inp, weight):\n    return torch.outer(input, vec2)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"outer\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_outer(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.outer(ref_x)\n    res_out = bench.triton.outer(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

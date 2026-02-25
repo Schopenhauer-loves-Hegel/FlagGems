@@ -1,0 +1,48 @@
+{
+    "query": "操作符名字是 slice_scatter，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "slice_scatter",
+    "func_desc": "The slice_scatter operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "src",
+            "type": "Any",
+            "desc": "Parameter src"
+        },
+        {
+            "name": "dim",
+            "type": "int",
+            "desc": "Parameter dim"
+        },
+        {
+            "name": "start",
+            "type": "Any",
+            "desc": "Parameter start"
+        },
+        {
+            "name": "end",
+            "type": "Any",
+            "desc": "Parameter end"
+        },
+        {
+            "name": "step",
+            "type": "int",
+            "desc": "Parameter step"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.utils.shape_utils import MemOverlap, has_internal_overlapping\n\nlogger = logging.getLogger(__name__)\n\n\n@triton.jit\ndef slice_scatter_kernel(\n    out_ptr,\n    inp_ptr,\n    src_ptr,\n    total_elements,\n    dim_size,\n    dim_prod_post,\n    start,\n    step,\n    src_dim_size,\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tl.program_id(0)\n    block_start = pid * BLOCK_SIZE\n    offsets = tl.arange(0, BLOCK_SIZE)\n    mask = block_start + offsets < total_elements\n\n    idx = block_start + offsets\n    pre_idx = idx // (dim_size * dim_prod_post)\n    dim_idx = (idx // dim_prod_post) % dim_size\n    post_idx = idx % dim_prod_post\n\n    slice_mask = (\n        (dim_idx >= start)\n        & (dim_idx < start + src_dim_size * step)\n        & ((dim_idx - start) % step == 0)\n    )\n\n    inp_data = tl.load(inp_ptr + idx, mask=mask)\n\n    src_dim_idx = (dim_idx - start) // step\n    src_idx = (\n        pre_idx * src_dim_size * dim_prod_post + src_dim_idx * dim_prod_post + post_idx\n    )\n    src_data = tl.load(src_ptr + src_idx, mask=mask & slice_mask)\n    result = tl.where(slice_mask, src_data, inp_data)\n    tl.store(out_ptr + idx, result, mask=mask)\n\n\ndef slice_scatter(inp, src, dim=0, start=None, end=None, step=1):\n    logger.debug(\"GEMS SLICE_SCATTER\")\n    assert src.device == inp.device, \"inp and src reside on different devices.\"\n    assert dim >= -inp.ndim and dim < inp.ndim, \"Invalid dim\"\n    assert step > 0, \"slice step must be positive\"\n    dim = dim % inp.ndim\n\n    start = start or 0\n    end = end or inp.size(dim)\n    if end < 0:\n        end = end % inp.size(dim)\n\n    valid_shape = list(inp.shape)\n    valid_shape[dim] = triton.cdiv(end - start, step)\n    assert (\n        list(src.shape) == valid_shape\n    ), \"Expected src to have a size equal to the slice of self\"\n\n    if has_internal_overlapping(inp) == MemOverlap.Yes:\n        out = torch.empty(inp.size(), dtype=inp.dtype, device=inp.device)\n    else:\n        out = torch.empty_strided(\n            inp.size(), inp.stride(), dtype=inp.dtype, device=inp.device\n        )\n\n    inp = inp.contiguous()\n    src = src.contiguous()\n\n    total_elements = inp.numel()\n    dim_size = inp.size(dim)\n    src_dim_size = src.size(dim)\n\n    dim_prod_post = 1\n    for d in range(dim + 1, inp.ndim):\n        dim_prod_post *= inp.size(d)\n\n    BLOCK_SIZE = 1024\n    grid = (triton.cdiv(total_elements, BLOCK_SIZE),)\n\n    slice_scatter_kernel[grid](\n        out,\n        inp,\n        src,\n        total_elements,\n        dim_size,\n        dim_prod_post,\n        start,\n        step,\n        src_dim_size,\n        BLOCK_SIZE=BLOCK_SIZE,\n    )\n\n    return out",
+    "torch_kernel_code": "import torch\n\ndef slice_scatter(inp, src, dim=0, start=None, end=None, step=1):\n    return torch.slice_scatter(inp, src, dim, start, end, step)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"slice_scatter\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_slice_scatter(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.slice_scatter(ref_x)\n    res_out = bench.triton.slice_scatter(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

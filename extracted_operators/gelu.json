@@ -1,0 +1,28 @@
+{
+    "query": "操作符名字是 gelu，是一个 pointwise 算子，处理硬件是 Nvidia。",
+    "kernel_name": "gelu",
+    "func_desc": "The gelu operator",
+    "func_type": "pointwise",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "self",
+            "type": "Any",
+            "desc": "Parameter self"
+        },
+        {
+            "name": "approximate",
+            "type": "torch.Tensor",
+            "desc": "Parameter approximate"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.utils import pointwise_dynamic, tl_extra_shim\n\nerf = tl_extra_shim.erf\nexp = tl_extra_shim.exp\npow = tl_extra_shim.pow\ntanh = tl_extra_shim.tanh\n\n\nlogger = logging.getLogger(__name__)\n\n\n@pointwise_dynamic(promotion_methods=[(0, \"DEFAULT\")])\n@triton.jit\ndef gelu_none(x):\n    scale: tl.constexpr = 0.7071067811  # 1 / math.sqrt(2)\n    output = 0.5 * x * (1 + erf(x.to(tl.float32) * scale))\n    return output\n\n\n@pointwise_dynamic(promotion_methods=[(0, \"DEFAULT\")])\n@triton.jit\ndef gelu_tanh(x):\n    x_fp32 = x.to(tl.float32)\n    output = 0.5 * x * (1 + tanh(x_fp32 * 0.79788456 * (1 + 0.044715 * pow(x_fp32, 2))))\n    return output\n\n\n@pointwise_dynamic(promotion_methods=[(0, 1, \"DEFAULT\")])\n@triton.jit\ndef gelu_backward_none(x, dy):\n    scale1: tl.constexpr = 0.7071067811  # 1 / math.sqrt(2)\n    scale2: tl.constexpr = 0.3989422803  # 1 / math.sqrt(2 * math.pi)\n    x_fp32 = x.to(tl.float32)\n    dydx = (\n        scale2 * x_fp32 * exp(-pow(scale1 * x_fp32, 2))\n        + 0.5 * erf(scale1 * x_fp32)\n        + 0.5\n    )\n    dx = dydx * dy\n    return dx\n\n\n@pointwise_dynamic(promotion_methods=[(0, 1, \"DEFAULT\")])\n@triton.jit\ndef gelu_backward_tanh(x, dy):\n    x_fp32 = x.to(tl.float32)\n    # 0.79788456 = math.sqrt(2 / math.pi)\n    tanh_out = tanh(0.79788456 * x_fp32 * (1 + 0.044715 * pow(x_fp32, 2)))\n    dydx = 0.5 * x_fp32 * (\n        (1 - pow(tanh_out, 2)) * (0.79788456 + 0.1070322243 * pow(x_fp32, 2))\n    ) + 0.5 * (1 + tanh_out)\n    dx = dydx * dy\n    return dx\n\n\ndef gelu(self, *, approximate=\"none\"):\n    logger.debug(\"GEMS GELU FORWARD\")\n    if approximate == \"tanh\":\n        out = gelu_tanh(self)\n    else:\n        out = gelu_none(self)\n    return out\n\n\ndef gelu_backward(grad_output, self, *, approximate=\"none\"):\n    logger.debug(\"GEMS GELU BACKWARD\")\n    if approximate == \"tanh\":\n        in_grad = gelu_backward_tanh(self, grad_output)\n    else:\n        in_grad = gelu_backward_none(self, grad_output)\n    return in_grad\n\n\ndef gelu_(A, *, approximate=\"none\"):\n    logger.debug(\"GEMS GELU_ FORWARD\")\n    if approximate == \"tanh\":\n        out = gelu_tanh(A, out0=A)\n    else:\n        out = gelu_none(A, out0=A)\n    return out",
+    "torch_kernel_code": "import torch\n\ndef gelu(self, *, approximate=\"none\"):\n    return torch.gelu(self, approximate)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"gelu\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_gelu(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.gelu(ref_x)\n    res_out = bench.triton.gelu(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

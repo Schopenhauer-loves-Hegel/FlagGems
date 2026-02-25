@@ -1,0 +1,48 @@
+{
+    "query": "操作符名字是 full，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "full",
+    "func_desc": "The full operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "size",
+            "type": "int",
+            "desc": "Parameter size"
+        },
+        {
+            "name": "fill_value",
+            "type": "Any",
+            "desc": "Parameter fill_value"
+        },
+        {
+            "name": "dtype",
+            "type": "torch.Tensor",
+            "desc": "Parameter dtype"
+        },
+        {
+            "name": "layout",
+            "type": "torch.Tensor",
+            "desc": "Parameter layout"
+        },
+        {
+            "name": "device",
+            "type": "Any",
+            "desc": "Parameter device"
+        },
+        {
+            "name": "pin_memory",
+            "type": "torch.Tensor",
+            "desc": "Parameter pin_memory"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom ..runtime import torch_device_fn\nfrom ..utils import triton_lang_extension as tle\nfrom ..utils.shape_utils import volume\n\n\n@triton.jit(do_not_specialize=[\"fill_value_or_ptr\"])\ndef full_kernel(\n    output_ptr,\n    n_elements,\n    fill_value_or_ptr,\n    FILL_VALUE_IS_PTR: tl.constexpr,\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tle.program_id(axis=0)\n    block_start = pid * BLOCK_SIZE\n    offsets = block_start + tl.arange(0, BLOCK_SIZE)\n    mask = offsets < n_elements\n    if FILL_VALUE_IS_PTR:\n        fill_value = tl.load(fill_value_or_ptr)\n    else:\n        fill_value = fill_value_or_ptr\n    tl.store(output_ptr + offsets, fill_value, mask=mask)\n\n\nALL_INT_DTYPES = (torch.int8, torch.int16, torch.int32, torch.int64)\nALL_FLOAT_DTYPES = (torch.bfloat16, torch.float16, torch.float32, torch.float64)\n\n\ndef check_dtype(fill_value, dtype, device):\n    if isinstance(fill_value, bool):\n        if dtype != torch.bool:\n            fill_value = int(fill_value)\n    elif (\n        dtype in ALL_INT_DTYPES\n        and (fill_value < torch.iinfo(dtype).min or fill_value > torch.iinfo(dtype).max)\n    ) or (\n        dtype in ALL_FLOAT_DTYPES\n        and (fill_value < torch.finfo(dtype).min or fill_value > torch.finfo(dtype).max)\n    ):\n        raise RuntimeError(\n            f\"value cannot be converted to type {dtype} without overflow\"\n        )\n    if dtype in ALL_FLOAT_DTYPES:\n        fill_value = torch.tensor(fill_value, dtype=dtype, device=device)\n    return fill_value\n\n\ndef full(size, fill_value, *, dtype=None, layout=None, device=None, pin_memory=None):\n    if device is None:\n        device = torch.device(\"cpu\")\n    if dtype is None:\n        if isinstance(fill_value, bool):\n            dtype = torch.bool\n        elif isinstance(fill_value, int):\n            dtype = torch.int64\n        else:\n            dtype = torch.get_default_dtype()\n    else:\n        fill_value = check_dtype(fill_value, dtype, device)\n\n    out = torch.empty(size, device=device, dtype=dtype)\n    N = volume(size)\n    grid_fn = lambda meta: (triton.cdiv(N, meta[\"BLOCK_SIZE\"]),)\n    with torch_device_fn.device(device):\n        full_kernel[grid_fn](\n            out,\n            N,\n            fill_value,\n            FILL_VALUE_IS_PTR=isinstance(fill_value, torch.Tensor),\n            BLOCK_SIZE=1024,\n        )\n    return out",
+    "torch_kernel_code": "import torch\n\ndef full(size, fill_value, *, dtype=None, layout=None, device=None, pin_memory=None):\n    return torch.full(size, fill_value, dtype=dtype, layout=layout, device=device, pin_memory=pin_memory)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"full\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_full(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.full(ref_x)\n    res_out = bench.triton.full(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

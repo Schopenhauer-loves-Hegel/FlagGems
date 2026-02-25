@@ -1,0 +1,43 @@
+{
+    "query": "操作符名字是 zeros，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "zeros",
+    "func_desc": "The zeros operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "size",
+            "type": "int",
+            "desc": "Parameter size"
+        },
+        {
+            "name": "dtype",
+            "type": "torch.Tensor",
+            "desc": "Parameter dtype"
+        },
+        {
+            "name": "layout",
+            "type": "torch.Tensor",
+            "desc": "Parameter layout"
+        },
+        {
+            "name": "device",
+            "type": "Any",
+            "desc": "Parameter device"
+        },
+        {
+            "name": "pin_memory",
+            "type": "torch.Tensor",
+            "desc": "Parameter pin_memory"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.runtime import device, torch_device_fn\nfrom flag_gems.utils import triton_lang_extension as tle\nfrom flag_gems.utils.shape_utils import volume\n\ndevice_ = device\nlogger = logging.getLogger(__name__)\n\n\n@triton.jit\ndef zeros_kernel(\n    output_ptr,\n    n_elements,\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tle.program_id(axis=0)  # We use a 1D launch grid so axis is 0.\n    block_start = pid * BLOCK_SIZE\n    offsets = block_start + tl.arange(0, BLOCK_SIZE)\n    mask = offsets < n_elements\n    tl.store(output_ptr + offsets, 0.0, mask=mask)\n\n\ndef zeros(size, *, dtype=None, layout=None, device=None, pin_memory=None):\n    logger.debug(\"GEMS ZEROS\")\n    if dtype is None:\n        dtype = torch.get_default_dtype()\n    if device is None:\n        device = torch.device(device_.name)\n\n    out = torch.empty(size, device=device, dtype=dtype)\n    N = volume(size)\n    grid_fn = lambda meta: (triton.cdiv(N, meta[\"BLOCK_SIZE\"]),)\n    with torch_device_fn.device(device):\n        zeros_kernel[grid_fn](out, N, BLOCK_SIZE=1024)\n    return out",
+    "torch_kernel_code": "import torch\n\ndef zeros(size, *, dtype=None, layout=None, device=None, pin_memory=None):\n    return torch.zeros(size, dtype, layout, device, pin_memory)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"zeros\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_zeros(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.zeros(ref_x)\n    res_out = bench.triton.zeros(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

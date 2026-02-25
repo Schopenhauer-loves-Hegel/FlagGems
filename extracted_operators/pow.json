@@ -1,0 +1,17 @@
+{
+    "query": "操作符名字是 pow，是一个 pointwise 算子，处理硬件是 Nvidia。",
+    "kernel_name": "pow",
+    "func_desc": "The pow operator",
+    "func_type": "pointwise",
+    "gpu": "nvidia",
+    "input_args": [],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.utils import pointwise_dynamic, tl_extra_shim\n\n_pow = tl_extra_shim.pow\nlogger = logging.getLogger(__name__)\n\n\n@pointwise_dynamic(promotion_methods=[(0, 1, \"BOOL_TO_LONG\")])\n@triton.jit\ndef pow_func(x, exponent):\n    return _pow(x.to(tl.float32), exponent)\n\n\ndef pow_tensor_tensor(A, exponent):\n    logger.debug(\"GEMS POW_TENSOR_TENSOR\")\n    return pow_func(A, exponent)\n\n\ndef pow_tensor_tensor_(A, exponent):\n    logger.debug(\"GEMS POW_TENSOR_TENSOR_\")\n    return pow_func(A, exponent, out0=A)\n\n\n@pointwise_dynamic(is_tensor=[True, False], promotion_methods=[(0, 1, \"BOOL_TO_LONG\")])\n@triton.jit\ndef pow_func_tensor_scalar(x, exponent):\n    return _pow(x.to(tl.float32), exponent)\n\n\ndef pow_tensor_scalar(A, exponent):\n    logger.debug(\"GEMS POW_TENSOR_SCALAR\")\n    return pow_func_tensor_scalar(A, exponent)\n\n\ndef pow_tensor_scalar_(A, exponent):\n    logger.debug(\"GEMS POW_TENSOR_SCALAR_\")\n    return pow_func_tensor_scalar(A, exponent, out0=A)\n\n\n@pointwise_dynamic(is_tensor=[False, True], promotion_methods=[(0, 1, \"BOOL_TO_LONG\")])\n@triton.jit\ndef pow_func_scalar_tensor(x, exponent):\n    return _pow(x.to(tl.float32), exponent)\n\n\ndef pow_scalar(A, exponent):\n    logger.debug(\"GEMS POW_SCALAR\")\n    return pow_func_scalar_tensor(A, exponent)",
+    "torch_kernel_code": "import torch\n\ndef pow(input):\n    return torch.pow(input, exponent)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"pow\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_pow(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.pow(ref_x)\n    res_out = bench.triton.pow(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

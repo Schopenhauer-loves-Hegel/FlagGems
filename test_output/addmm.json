@@ -1,0 +1,43 @@
+{
+    "query": "操作符名字是 addmm，是一个 blas 算子，处理硬件是 Nvidia。",
+    "kernel_name": "addmm",
+    "func_desc": "The addmm operator",
+    "func_type": "blas",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "bias",
+            "type": "torch.Tensor",
+            "desc": "Parameter bias"
+        },
+        {
+            "name": "mat1",
+            "type": "torch.Tensor",
+            "desc": "Parameter mat1"
+        },
+        {
+            "name": "mat2",
+            "type": "torch.Tensor",
+            "desc": "Parameter mat2"
+        },
+        {
+            "name": "beta",
+            "type": "float",
+            "desc": "Parameter beta"
+        },
+        {
+            "name": "alpha",
+            "type": "float",
+            "desc": "Parameter alpha"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom .. import runtime\nfrom ..runtime import torch_device_fn\nfrom ..utils import libentry\nfrom ..utils import triton_lang_extension as tle\n\n\n@libentry()\n@triton.autotune(\n    configs=runtime.get_tuned_config(\"addmm\"),\n    key=[\"M\", \"N\", \"K\"],\n)\n@triton.jit(do_not_specialize=[\"alpha\", \"beta\"])\ndef addmm_kernel(\n    a_ptr,\n    b_ptr,\n    bias_ptr,\n    c_ptr,\n    alpha,\n    beta,\n    M,\n    N,\n    K,\n    stride_am,\n    stride_ak,\n    stride_bk,\n    stride_bn,\n    stride_cm,\n    stride_cn,\n    BLOCK_SIZE_M: tl.constexpr,\n    BLOCK_SIZE_N: tl.constexpr,\n    BLOCK_SIZE_K: tl.constexpr,\n):\n    pid_m = tle.program_id(0)\n    pid_n = tle.program_id(1)\n\n    offs_am = pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)\n    offs_bn = pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)\n    offs_k = tl.arange(0, BLOCK_SIZE_K)\n    a_ptrs = a_ptr + (offs_am[:, None] * stride_am + offs_k[None, :] * stride_ak)\n    b_ptrs = b_ptr + (offs_k[:, None] * stride_bk + offs_bn[None, :] * stride_bn)\n    bias_ptrs = bias_ptr + offs_bn\n\n    accumulator = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)\n    for k in range(0, tl.cdiv(K, BLOCK_SIZE_K)):\n        a = tl.load(\n            a_ptrs,\n            mask=(offs_am[:, None] < M) & (offs_k[None, :] < K - k * BLOCK_SIZE_K),\n            other=0.0,\n        )\n        b = tl.load(\n            b_ptrs,\n            mask=(offs_k[:, None] < K - k * BLOCK_SIZE_K) & (offs_bn[None, :] < N),\n            other=0.0,\n        )\n        accumulator += tl.dot(a, b, allow_tf32=False)\n        a_ptrs += BLOCK_SIZE_K * stride_ak\n        b_ptrs += BLOCK_SIZE_K * stride_bk\n    bias = tl.load(bias_ptrs, mask=offs_bn < N, other=0.0)\n    accumulator = accumulator * alpha + bias * beta\n    c = accumulator.to(bias.dtype)\n\n    offs_cm = pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)\n    offs_cn = pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)\n    c_ptrs = c_ptr + stride_cm * offs_cm[:, None] + stride_cn * offs_cn[None, :]\n    c_mask = (offs_cm[:, None] < M) & (offs_cn[None, :] < N)\n    tl.store(c_ptrs, c, mask=c_mask)\n\n\ndef addmm(bias, mat1, mat2, *, beta=1, alpha=1):\n    assert mat1.shape[1] == mat2.shape[0], \"Incompatible dimensions\"\n    M, K = mat1.shape\n    _, N = mat2.shape\n\n    mat1 = mat1.contiguous()\n    mat2 = mat2.contiguous()\n    out = torch.empty((M, N), device=mat1.device, dtype=mat1.dtype)\n\n    grid = lambda META: (\n        triton.cdiv(M, META[\"BLOCK_SIZE_M\"]),\n        triton.cdiv(N, META[\"BLOCK_SIZE_N\"]),\n    )\n    with torch_device_fn.device(mat1.device):\n        addmm_kernel[grid](\n            mat1,\n            mat2,\n            bias,\n            out,\n            alpha,\n            beta,\n            M,\n            N,\n            K,\n            mat1.stride(0),\n            mat1.stride(1),\n            mat2.stride(0),\n            mat2.stride(1),\n            out.stride(0),\n            out.stride(1),\n        )\n    return out",
+    "torch_kernel_code": "import torch\n\ndef addmm(bias, mat1, mat2, *, beta=1, alpha=1):\n    return torch.addmm(bias, input, mat2, beta=beta, alpha=alpha)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"addmm\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_addmm(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.addmm(ref_x)\n    res_out = bench.triton.addmm(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

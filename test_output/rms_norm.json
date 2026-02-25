@@ -1,0 +1,38 @@
+{
+    "query": "操作符名字是 rms_norm，是一个 normalization 算子，处理硬件是 Nvidia。",
+    "kernel_name": "rms_norm",
+    "func_desc": "The rms_norm operator",
+    "func_type": "normalization",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "x",
+            "type": "torch.Tensor",
+            "desc": "Parameter x"
+        },
+        {
+            "name": "normalized_shape",
+            "type": "Any",
+            "desc": "Parameter normalized_shape"
+        },
+        {
+            "name": "weight",
+            "type": "torch.Tensor",
+            "desc": "Parameter weight"
+        },
+        {
+            "name": "eps",
+            "type": "float",
+            "desc": "Parameter eps"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\nimport math\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom ..runtime import torch_device_fn\nfrom ..utils import libentry\nfrom ..utils import triton_lang_extension as tle\n\n\n@libentry()\n@triton.jit(do_not_specialize=[\"eps\"])\ndef rms_norm_kernel(\n    Y,  # pointer to the output\n    X,  # pointer to the input\n    W,  # pointer to the weights\n    y_stride_r,\n    y_stride_c,\n    x_stride_r,  # how much to increase the pointer when moving by 1 row\n    x_stride_c,  # how much to increase the pointer when moving by 1 col\n    N,  # number of columns in X\n    eps,  # epsilon to avoid division by zero\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tle.program_id(0)\n    Y += pid * y_stride_r\n    X += pid * x_stride_r\n\n    mask = tl.arange(0, BLOCK_SIZE) < N\n    cols = tl.arange(0, BLOCK_SIZE)\n    x = tl.load(X + cols * x_stride_c, mask, other=0.0).to(tl.float32)\n\n    var = tl.sum(x * x, axis=0) / N\n    rrms = 1 / tl.sqrt(var + eps)\n\n    w = tl.load(W + tl.arange(0, BLOCK_SIZE), mask=mask, other=0.0)\n    y = (x * rrms).to(Y.dtype.element_ty) * w\n    tl.store(Y + cols * y_stride_c, y, mask=mask)\n\n\nclass RmsNorm(torch.autograd.Function):\n    @staticmethod\n    def forward(ctx, x, normalized_shape, weight, eps=1e-5):\n        dim = x.ndim - len(normalized_shape)\n        M = math.prod(x.shape[:dim])\n        N = math.prod(normalized_shape)\n\n        BLOCK_SIZE = triton.next_power_of_2(N)\n        x = x.contiguous()\n        weight = weight.contiguous()\n        y = torch.empty_like(x)\n\n        with torch_device_fn.device(x.device):\n            rms_norm_kernel[M,](y, x, weight, N, 1, N, 1, N, eps, BLOCK_SIZE)\n        return y\n\n\ndef rms_norm(x, normalized_shape, weight, eps=1e-5):\n    return RmsNorm.apply(x, normalized_shape, weight, eps)",
+    "torch_kernel_code": "import torch\n\ndef rms_norm(x, normalized_shape, weight, eps=1e-5):\n    return torch.nn.functional.rms_norm(input, normalized_shape, weight=weight, eps=eps)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"rms_norm\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_rms_norm(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.rms_norm(ref_x)\n    res_out = bench.triton.rms_norm(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

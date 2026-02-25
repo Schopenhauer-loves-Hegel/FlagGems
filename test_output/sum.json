@@ -1,0 +1,28 @@
+{
+    "query": "操作符名字是 sum，是一个 reduction 算子，处理硬件是 Nvidia。",
+    "kernel_name": "sum",
+    "func_desc": "The sum operator",
+    "func_type": "reduction",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "dtype",
+            "type": "torch.Tensor",
+            "desc": "Parameter dtype"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\nimport math\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom .. import runtime\nfrom ..runtime import torch_device_fn\nfrom ..utils import dim_compress, libentry\nfrom ..utils import triton_lang_extension as tle\n\n\n@libentry()\n@triton.jit\ndef sum_kernel_1(\n    inp,\n    mid,\n    M,\n    BLOCK_SIZE: tl.constexpr,\n):\n    if tl.constexpr(inp.dtype.element_ty == tl.float16) or tl.constexpr(\n        inp.dtype.element_ty == tl.bfloat16\n    ):\n        cdtype = tl.float32\n    else:\n        cdtype = inp.dtype.element_ty\n\n    pid = tle.program_id(0)\n    offset = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    inp_ptrs = inp + offset\n    mask = offset < M\n\n    inp_val = tl.load(inp_ptrs, mask=mask, other=0).to(cdtype)\n    sum_val = tl.sum(inp_val)\n    mid_ptr = mid + pid\n    tl.store(mid_ptr, sum_val)\n\n\n@libentry()\n@triton.jit\ndef sum_kernel_2(mid, out, mid_size, BLOCK_MID: tl.constexpr):\n    if tl.constexpr(mid.dtype.element_ty == tl.float16) or tl.constexpr(\n        mid.dtype.element_ty == tl.bfloat16\n    ):\n        cdtype = tl.float32\n    else:\n        cdtype = mid.dtype.element_ty\n\n    offset = tl.arange(0, BLOCK_MID)\n    mid_ptrs = mid + offset\n    mask = offset < mid_size\n    mid_val = tl.load(mid_ptrs, mask=mask, other=0).to(cdtype)\n    sum_val = tl.sum(mid_val)\n    tl.store(out, sum_val)\n\n\n@libentry()\n@triton.autotune(configs=runtime.get_tuned_config(\"sum\"), key=[\"M\", \"N\"])\n@triton.jit\ndef sum_kernel(\n    inp,\n    out,\n    M,\n    N,\n    BLOCK_M: tl.constexpr,\n    BLOCK_N: tl.constexpr,\n):\n    if tl.constexpr(inp.dtype.element_ty == tl.float16) or tl.constexpr(\n        inp.dtype.element_ty == tl.bfloat16\n    ):\n        cdtype = tl.float32\n    else:\n        cdtype = inp.dtype.element_ty\n\n    # Map the program id to the row of inp it should compute.\n    pid = tle.program_id(0) * BLOCK_M + tl.arange(0, BLOCK_M)[:, None]\n    inp = inp + pid * N\n    out = out + pid\n    row_mask = pid < M\n\n    _sum = tl.zeros([BLOCK_M, BLOCK_N], dtype=cdtype)\n    for off in range(0, N, BLOCK_N):\n        cols = off + tl.arange(0, BLOCK_N)[None, :]\n        col_mask = cols < N\n        mask = row_mask and col_mask\n\n        a = tl.load(inp + cols, mask, other=0).to(cdtype)\n        _sum += a\n    sum = tl.sum(_sum, axis=1)[:, None]\n    tl.store(out, sum, row_mask)\n\n\ndef sum(inp, *, dtype=None):\n    M = inp.numel()\n    if dtype is None:\n        dtype = inp.dtype\n        if dtype is torch.bool:\n            inp = inp.to(torch.int64)\n            dtype = torch.int64\n    block_size = triton.next_power_of_2(math.ceil(math.sqrt(M)))\n    mid_size = triton.cdiv(M, block_size)\n    block_mid = triton.next_power_of_2(mid_size)\n\n    mid = torch.empty((mid_size,), dtype=dtype, device=inp.device)\n    out = torch.empty([], dtype=dtype, device=inp.device)\n\n    with torch_device_fn.device(inp.device):\n        sum_kernel_1[(mid_size, 1, 1)](inp, mid, M, block_size)\n        sum_kernel_2[(1, 1, 1)](mid, out, mid_size, block_mid)\n    return out\n\n\ndef sum_dim(inp, dim=None, keepdim=False, *, dtype=None):\n    if dtype is None:\n        dtype = inp.dtype\n        if dtype is torch.bool:\n            dtype = torch.int64\n\n    if dim == []:\n        if not keepdim:\n            return sum(inp, dtype=dtype)\n        else:\n            dim_num = inp.ndim\n            return torch.reshape(sum(inp, dtype=dtype), [1] * dim_num)\n\n    shape = list(inp.shape)\n    dim = [d % inp.ndim for d in dim]\n    inp = dim_compress(inp, dim)\n    N = 1\n    for i in dim:\n        N *= shape[i]\n        shape[i] = 1\n    M = inp.numel() // N\n\n    out = torch.empty(shape, dtype=dtype, device=inp.device)\n\n    grid = lambda meta: (triton.cdiv(M, meta[\"BLOCK_M\"]),)\n    with torch_device_fn.device(inp.device):\n        sum_kernel[grid](inp, out, M, N)\n    if not keepdim:\n        out = out.squeeze(dim=dim)\n    return out",
+    "torch_kernel_code": "import torch\n\ndef sum(inp, *, dtype=None):\n    return torch.sum(input, dim=dim, keepdim=keepdim)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"sum\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_sum(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.sum(ref_x)\n    res_out = bench.triton.sum(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

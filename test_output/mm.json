@@ -1,0 +1,28 @@
+{
+    "query": "操作符名字是 mm，是一个 blas 算子，处理硬件是 Nvidia。",
+    "kernel_name": "mm",
+    "func_desc": "The mm operator",
+    "func_type": "blas",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "a",
+            "type": "Any",
+            "desc": "Parameter a"
+        },
+        {
+            "name": "b",
+            "type": "Any",
+            "desc": "Parameter b"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom .. import runtime\nfrom ..runtime import torch_device_fn\nfrom ..utils import libentry, libtuner\nfrom ..utils import triton_lang_extension as tle\n\n\n@libentry()\n@libtuner(\n    configs=runtime.get_tuned_config(\"mm\"),\n    key=[\"M\", \"N\", \"K\"],\n)\n@triton.heuristics(runtime.get_heuristic_config(\"mm\"))\n@triton.jit\ndef mm_kernel(\n    A,\n    B,\n    C,\n    M,\n    N,\n    K,\n    stride_am,\n    stride_ak,\n    stride_bk,\n    stride_bn,\n    stride_cm,\n    stride_cn,\n    dot_out_dtype: tl.constexpr,\n    BLOCK_M: tl.constexpr,\n    BLOCK_N: tl.constexpr,\n    BLOCK_K: tl.constexpr,\n    GROUP_M: tl.constexpr,\n    SPLIT_K: tl.constexpr,\n    EVEN_K: tl.constexpr,\n):\n    # matrix multiplication\n    pid = tle.program_id(0)\n    pid_z = tle.program_id(1)\n    grid_m = tl.cdiv(M, BLOCK_M)\n    grid_n = tl.cdiv(N, BLOCK_N)\n    # re-order program ID for better L2 performance\n    width = GROUP_M * grid_n\n    group_id = pid // width\n    group_size = min(grid_m - group_id * GROUP_M, GROUP_M)\n    pid_m = group_id * GROUP_M + (pid % group_size)\n    pid_n = (pid % width) // (group_size)\n    # do matrix multiplication\n    rm = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)\n    rn = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)\n    ram = tl.max_contiguous(tl.multiple_of(rm % M, BLOCK_M), BLOCK_M)\n    rbn = tl.max_contiguous(tl.multiple_of(rn % N, BLOCK_N), BLOCK_N)\n    rk = pid_z * BLOCK_K + tl.arange(0, BLOCK_K)\n    # pointers\n    A = A + (ram[:, None] * stride_am + rk[None, :] * stride_ak)\n    B = B + (rk[:, None] * stride_bk + rbn[None, :] * stride_bn)\n    acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=dot_out_dtype)\n    for k in range(0, tl.cdiv(K, BLOCK_K * SPLIT_K)):\n        if EVEN_K:\n            a = tl.load(A)\n            b = tl.load(B)\n        else:\n            k_remaining = K - k * (BLOCK_K * SPLIT_K)\n            _0 = tl.zeros((1, 1), dtype=C.dtype.element_ty)\n            a = tl.load(A, mask=rk[None, :] < k_remaining, other=_0)\n            b = tl.load(B, mask=rk[:, None] < k_remaining, other=_0)\n        if a.dtype != b.dtype:\n            a = a.to(C.dtype.element_ty)\n            b = b.to(C.dtype.element_ty)\n        acc += tl.dot(a, b, out_dtype=dot_out_dtype, allow_tf32=False)\n        A += BLOCK_K * SPLIT_K * stride_ak\n        B += BLOCK_K * SPLIT_K * stride_bk\n    acc = acc.to(C.dtype.element_ty)\n    # rematerialize rm and rn to save registers\n    rm = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)\n    rn = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)\n    C = C + (rm[:, None] * stride_cm + rn[None, :] * stride_cn)\n    mask = (rm < M)[:, None] & (rn < N)[None, :]\n    # handles write-back with reduction-splitting\n    if SPLIT_K == 1:\n        tl.store(C, acc, mask=mask)\n    else:\n        tl.atomic_add(C, acc, mask=mask)\n\n\n_ordered_datatypes = [torch.float16, torch.bfloat16, torch.float32]\n\n\ndef get_higher_dtype(a, b):\n    if a is b:\n        return a\n\n    assert a in _ordered_datatypes\n    assert b in _ordered_datatypes\n\n    for d in _ordered_datatypes:\n        if a is d:\n            return b\n        if b is d:\n            return a\n\n\ndef mm(a, b):\n    device = a.device\n    # handle non-contiguous inputs if necessary\n    if a.stride(0) > 1 and a.stride(1) > 1:\n        a = a.contiguous()\n    if b.stride(0) > 1 and b.stride(1) > 1:\n        b = b.contiguous()\n    # checks constraints\n    assert a.shape[1] == b.shape[0], \"incompatible dimensions\"\n    M, K = a.shape\n    _, N = b.shape\n    # allocates output\n    c_dtype = get_higher_dtype(a.dtype, b.dtype)\n    c = torch.empty((M, N), device=device, dtype=c_dtype)\n    dot_out_dtype = tl.float32\n    # launch kernel\n    grid = lambda META: (\n        triton.cdiv(M, META[\"BLOCK_M\"]) * triton.cdiv(N, META[\"BLOCK_N\"]),\n        META[\"SPLIT_K\"],\n    )\n    with torch_device_fn.device(a.device):\n        mm_kernel[grid](\n            a,\n            b,\n            c,\n            M,\n            N,\n            K,\n            a.stride(0),\n            a.stride(1),\n            b.stride(0),\n            b.stride(1),\n            c.stride(0),\n            c.stride(1),\n            dot_out_dtype=dot_out_dtype,\n            GROUP_M=8,\n        )\n    return c",
+    "torch_kernel_code": "import torch\n\ndef mm(a, b):\n    return torch.mm(input, mat2)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"mm\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_mm(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.mm(ref_x)\n    res_out = bench.triton.mm(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

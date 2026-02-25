@@ -1,0 +1,43 @@
+{
+    "query": "操作符名字是 addmv，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "addmv",
+    "func_desc": "The addmv operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "self",
+            "type": "Any",
+            "desc": "Parameter self"
+        },
+        {
+            "name": "mat",
+            "type": "torch.Tensor",
+            "desc": "Parameter mat"
+        },
+        {
+            "name": "vec",
+            "type": "Any",
+            "desc": "Parameter vec"
+        },
+        {
+            "name": "beta",
+            "type": "float",
+            "desc": "Parameter beta"
+        },
+        {
+            "name": "alpha",
+            "type": "float",
+            "desc": "Parameter alpha"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems import runtime\nfrom flag_gems.runtime import torch_device_fn\nfrom flag_gems.utils import broadcastable_to, libentry\nfrom flag_gems.utils import triton_lang_extension as tle\n\nlogger = logging.getLogger(__name__)\n\n\n@libentry()\n@triton.autotune(\n    configs=runtime.get_tuned_config(\"mv\"),\n    key=[\"M\", \"N\"],\n)\n@triton.jit(do_not_specialize=[\"alpha\", \"beta\"])\ndef addmv_kernel(\n    A,\n    B,\n    Inp,\n    Out,\n    N,\n    M,\n    alpha,\n    beta,\n    stride_an,\n    stride_am,\n    stride_bm,\n    stride_in,\n    stride_outn,\n    BLOCK_N: tl.constexpr,\n    BLOCK_M: tl.constexpr,\n):\n    pid = tle.program_id(0)\n    offset_n = pid * BLOCK_N + tl.arange(0, BLOCK_N)[:, None]\n    offset_m = tl.arange(0, BLOCK_M)[None, :]\n    n_mask = offset_n < N\n    A_ptrs = A + offset_n * stride_an + offset_m * stride_am\n    B_ptrs = B + offset_m * stride_bm\n    acc = tl.zeros((BLOCK_N, BLOCK_M), dtype=tl.float32)\n    for m in range(0, M, BLOCK_M):\n        m_mask = m + offset_m < M\n        a = tl.load(A_ptrs, mask=n_mask & m_mask, other=0.0).to(tl.float32)\n        b = tl.load(B_ptrs, mask=m_mask, other=0.0).to(tl.float32)\n        acc += a * b\n        A_ptrs += BLOCK_M * stride_am\n        B_ptrs += BLOCK_M * stride_bm\n\n    acc = tl.sum(acc, axis=1)[:, None]\n    Inp_ptrs = Inp + offset_n * stride_in\n    inp = tl.load(Inp_ptrs, mask=n_mask, other=0.0).to(tl.float32)\n    Out_ptrs = Out + offset_n * stride_outn\n    out_block = acc * alpha + inp * beta\n    tl.store(Out_ptrs, out_block, mask=n_mask)\n\n\ndef addmv(self, mat, vec, *, beta=1, alpha=1):\n    logger.debug(\"GEMS ADDMV\")\n    assert mat.shape[1] == vec.shape[0], \"incompatible dimensions\"\n    assert broadcastable_to(self.shape, (mat.shape[0],)), \"Incompatible self shape\"\n    N, M = mat.shape\n    out = torch.empty((N,), device=mat.device, dtype=mat.dtype)\n    self = self.broadcast_to(out.shape)\n    grid = lambda META: (triton.cdiv(N, META[\"BLOCK_N\"]),)\n    with torch_device_fn.device(mat.device):\n        addmv_kernel[grid](\n            mat,\n            vec,\n            self,\n            out,\n            N,\n            M,\n            alpha,\n            beta,\n            mat.stride(0),\n            mat.stride(1),\n            vec.stride(0),\n            self.stride(0),\n            out.stride(0),\n        )\n    return out\n\n\ndef addmv_out(self, mat, vec, *, beta=1, alpha=1, out=None):\n    logger.debug(\"GEMS ADDMV OUT\")\n    assert mat.shape[1] == vec.shape[0], \"incompatible dimensions\"\n    assert broadcastable_to(self.shape, (mat.shape[0],)), \"Incompatible self shape\"\n    N, M = mat.shape\n    if out is None:\n        out = torch.empty((N,), device=mat.device, dtype=mat.dtype)\n    else:\n        assert out.shape == (N,), \"Incompatible output shape\"\n\n    self = self.broadcast_to(out.shape)\n    grid = lambda META: (triton.cdiv(N, META[\"BLOCK_N\"]),)\n    with torch_device_fn.device(mat.device):\n        addmv_kernel[grid](\n            mat,\n            vec,\n            self,\n            out,\n            N,\n            M,\n            alpha,\n            beta,\n            mat.stride(0),\n            mat.stride(1),\n            vec.stride(0),\n            self.stride(0),\n            out.stride(0),\n        )\n    return out",
+    "torch_kernel_code": "import torch\n\ndef addmv(self, mat, vec, *, beta=1, alpha=1):\n    return torch.addmv(self, mat, vec, beta, alpha)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"addmv\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_addmv(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.addmv(ref_x)\n    res_out = bench.triton.addmv(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

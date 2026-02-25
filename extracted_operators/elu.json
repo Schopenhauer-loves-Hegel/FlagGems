@@ -1,0 +1,38 @@
+{
+    "query": "操作符名字是 elu，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "elu",
+    "func_desc": "The elu operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "A",
+            "type": "Any",
+            "desc": "Parameter A"
+        },
+        {
+            "name": "alpha",
+            "type": "float",
+            "desc": "Parameter alpha"
+        },
+        {
+            "name": "scale",
+            "type": "float",
+            "desc": "Parameter scale"
+        },
+        {
+            "name": "input_scale",
+            "type": "torch.Tensor",
+            "desc": "Parameter input_scale"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.utils import pointwise_dynamic\n\nlogger = logging.getLogger(__name__)\n\n\n@pointwise_dynamic(\n    is_tensor=[True, False, False, False], promotion_methods=[(0, \"DEFAULT\")]\n)\n@triton.jit\ndef elu_forward_kernel(x, alpha, scale, input_scale):\n    return tl.where(\n        x > 0,\n        scale * input_scale * x,\n        scale * alpha * (tl.exp(x.to(tl.float32) * input_scale) - 1),\n    )\n\n\n@pointwise_dynamic(\n    is_tensor=[True, False, False, False, True], promotion_methods=[(0, 4, \"DEFAULT\")]\n)\n@triton.jit\ndef elu_backward_kernel_with_self(grad_output, alpha, scale, input_scale, x):\n    x_fp32 = x.to(tl.float32)\n    grad_input = tl.where(\n        x > 0,\n        grad_output * scale * input_scale,\n        grad_output * (scale * alpha * tl.exp(x_fp32 * input_scale) * input_scale),\n    )\n    return grad_input\n\n\n@pointwise_dynamic(\n    is_tensor=[True, False, False, False, True], promotion_methods=[(0, 4, \"DEFAULT\")]\n)\n@triton.jit\ndef elu_backward_kernel_with_result(grad_output, alpha, scale, input_scale, y):\n    grad_input = tl.where(\n        y > 0,\n        grad_output * scale * input_scale,\n        grad_output * ((y + scale * alpha) * input_scale),\n    )\n    return grad_input\n\n\ndef elu(A, alpha=1.0, scale=1.0, input_scale=1.0):\n    logger.debug(\"GEMS ELU\")\n    return elu_forward_kernel(A, alpha, scale, input_scale)\n\n\ndef elu_(A, alpha=1.0, scale=1.0, input_scale=1.0):\n    logger.debug(\"GEMS ELU_\")\n    return elu_forward_kernel(A, alpha, scale, input_scale, out0=A)\n\n\ndef elu_backward(grad_output, alpha, scale, input_scale, is_result, self_or_result):\n    logger.debug(\"GEMS ELU BACKWARD\")\n    if is_result:\n        return elu_backward_kernel_with_result(\n            grad_output, alpha, scale, input_scale, self_or_result\n        )\n    else:\n        return elu_backward_kernel_with_self(\n            grad_output, alpha, scale, input_scale, self_or_result\n        )",
+    "torch_kernel_code": "import torch\n\ndef elu(A, alpha=1.0, scale=1.0, input_scale=1.0):\n    return torch.elu(A, alpha, scale, input_scale)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"elu\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_elu(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.elu(ref_x)\n    res_out = bench.triton.elu(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

@@ -1,0 +1,33 @@
+{
+    "query": "操作符名字是 amax，是一个 reduction 算子，处理硬件是 Nvidia。",
+    "kernel_name": "amax",
+    "func_desc": "The amax operator",
+    "func_type": "reduction",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "inp",
+            "type": "Any",
+            "desc": "Parameter inp"
+        },
+        {
+            "name": "dim",
+            "type": "int",
+            "desc": "Parameter dim"
+        },
+        {
+            "name": "keepdim",
+            "type": "int",
+            "desc": "Parameter keepdim"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\nimport math\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom .. import runtime\nfrom ..runtime import torch_device_fn\nfrom ..utils import dim_compress, libentry\nfrom ..utils import triton_lang_extension as tle\n\n\n@libentry()\n@triton.jit\ndef amax_kernel_1(\n    inp,\n    mid,\n    M,\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tle.program_id(0)\n\n    offset = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    inp_ptrs = inp + offset\n    mask = offset < M\n    inp_val = tl.load(inp_ptrs, mask=mask, other=-float(\"inf\"))\n    amax_val = tl.max(inp_val)\n    mid_ptr = mid + pid\n    tl.store(mid_ptr, amax_val)\n\n\n@libentry()\n@triton.jit\ndef amax_kernel_2(mid, out, mid_size, BLOCK_MID: tl.constexpr):\n    offset = tl.arange(0, BLOCK_MID)\n    mid_ptrs = mid + offset\n    mask = offset < mid_size\n    mid_val = tl.load(mid_ptrs, mask=mask, other=-float(\"inf\"))\n    amax_val = tl.max(mid_val)\n    tl.store(out, amax_val)\n\n\n@libentry()\n@triton.autotune(configs=runtime.get_tuned_config(\"amax\"), key=[\"M\", \"N\"])\n@triton.jit\ndef amax_kernel(\n    inp,\n    out,\n    M,\n    N,\n    BLOCK_M: tl.constexpr,\n    BLOCK_N: tl.constexpr,\n):\n    # Map the program id to the row of inp it should compute.\n    pid = tle.program_id(0)\n    rows = pid * BLOCK_M + tl.arange(0, BLOCK_M)[:, None]\n    inp = inp + rows * N\n    out = out + rows\n    row_mask = rows < M\n\n    _all = tl.full([BLOCK_M, BLOCK_N], value=-float(\"inf\"), dtype=tl.float32)\n    for off in range(0, N, BLOCK_N):\n        cols = off + tl.arange(0, BLOCK_N)[None, :]\n        col_mask = cols < N\n        mask = row_mask and col_mask\n\n        a = tl.load(inp + cols, mask, other=-float(\"inf\")).to(tl.float32)\n        _all = tl.maximum(_all, a)\n    all = tl.max(_all, axis=1)[:, None]\n    tl.store(out, all, row_mask)\n\n\ndef amax(inp, dim=None, keepdim=False):\n    if dim is None or len(dim) == 0:\n        M = inp.numel()\n        block_size = triton.next_power_of_2(math.ceil(math.sqrt(M)))\n        mid_size = triton.cdiv(M, block_size)\n        block_mid = triton.next_power_of_2(mid_size)\n        dtype = inp.dtype\n        mid = torch.empty((mid_size,), dtype=dtype, device=inp.device)\n        if not keepdim:\n            out = torch.empty([], dtype=dtype, device=inp.device)\n        else:\n            shape = list(inp.shape)\n            for i in range(0, inp.dim()):\n                shape[i] = 1\n            out = torch.empty(shape, dtype=dtype, device=inp.device)\n        with torch_device_fn.device(inp.device):\n            amax_kernel_1[(mid_size, 1)](\n                inp,\n                mid,\n                M,\n                block_size,\n            )\n            amax_kernel_2[(1, 1)](\n                mid, out, mid_size, block_mid\n            )  # max block size is 128k, so mid does not requires int64 index\n        return out\n    else:\n        if isinstance(dim, int):\n            dim = [dim]\n        assert ((i >= -inp.ndim and i < inp.ndim) for i in dim), \"Invalid dim\"\n        dtype = inp.dtype\n\n        shape = list(inp.shape)\n        dim = [d % inp.ndim for d in dim]\n        inp = dim_compress(inp, dim)\n        N = 1\n        for i in dim:\n            N *= shape[i]\n            shape[i] = 1\n        M = inp.numel() // N\n\n        out = torch.empty(shape, dtype=dtype, device=inp.device)\n\n        grid = lambda meta: (triton.cdiv(M, meta[\"BLOCK_M\"]),)\n        with torch_device_fn.device(inp.device):\n            amax_kernel[grid](inp, out, M, N)\n        if not keepdim:\n            out = out.squeeze(dim=dim)\n        return out",
+    "torch_kernel_code": "import torch\n\ndef amax(inp, dim=None, keepdim=False):\n    return torch.amax(input, dim=dim, keepdim=keepdim)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"amax\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_amax(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.amax(ref_x)\n    res_out = bench.triton.amax(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

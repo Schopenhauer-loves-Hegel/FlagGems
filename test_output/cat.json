@@ -1,0 +1,17 @@
+{
+    "query": "操作符名字是 cat，是一个 tensor_ops 算子，处理硬件是 Nvidia。",
+    "kernel_name": "cat",
+    "func_desc": "The cat operator",
+    "func_type": "tensor_ops",
+    "gpu": "nvidia",
+    "input_args": [],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import itertools\nimport logging\nfrom typing import List, Tuple, Union\n\nimport torch\nimport triton\n\nfrom ..utils import pointwise_dynamic\nfrom ..utils.tensor_wrapper import StridedBuffer\n\n\n@pointwise_dynamic(is_tensor=[True], promotion_methods=[(0, \"DEFAULT\")])\n@triton.jit\ndef copy_func(x):\n    return x\n\n\ndef cat(\n    A: Union[Tuple[torch.Tensor, ...], List[torch.Tensor]], dim: int = 0\n) -> torch.Tensor:\n\n    if len(A) == 0:\n        raise RuntimeError(\"torch.cat(): expected a non-empty list of Tensors\")\n    if len(A) == 1:\n        return A[0]\n\n    assert dim >= -A[0].ndim and dim < A[0].ndim, f\"Invalid dim: {dim}\"\n    # Convert negative dim to positive\n    dim = dim % A[0].ndim\n\n    # Same rank check\n    inp_shapes = [list(_.shape) for _ in A]\n    inp0_shape = inp_shapes[0]\n    for s in inp_shapes[1:]:\n        if len(s) != len(inp0_shape):\n            raise RuntimeError(\n                f\"Tensors must have same number of dimensions: got {len(inp0_shape)} and {len(s)}\"\n            )\n    # Same size check\n    for tensor_idx, inp_shape in enumerate(inp_shapes):\n        for idx, (common_length, length) in enumerate(zip(inp0_shape, inp_shape)):\n            if idx == dim:\n                continue\n            elif length != common_length:\n                raise RuntimeError(\n                    f\"Sizes of tensors must match except in dimension {dim}. \"\n                    f\"Expected size {common_length} but got size {length} for tensor number \"\n                    f\"{tensor_idx} in the list\"\n                )\n\n    out_shape = list(inp0_shape)\n    out_shape[dim] = sum(s[dim] for s in inp_shapes)\n    out0 = torch.empty(out_shape, dtype=A[0].dtype, device=A[0].device)\n    out0_strides = out0.stride()\n    out0_offsets = list(\n        itertools.accumulate(\n            [s[dim] * out0_strides[dim] for s in inp_shapes[:-1]], initial=0\n        )\n    )\n\n    for a, out0_offset in zip(A, out0_offsets):\n        in_view = StridedBuffer(a, a.shape, a.stride())\n        out_view = StridedBuffer(out0, a.shape, out0.stride(), offset=out0_offset)\n        copy_func.instantiate(a.ndim)(in_view, out0=out_view)\n    return out0",
+    "torch_kernel_code": "import torch\n\ndef cat(*args, **kwargs):\n    return torch.cat(tensors, dim=dim)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"cat\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_cat(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.cat(ref_x)\n    res_out = bench.triton.cat(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

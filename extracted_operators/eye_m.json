@@ -1,0 +1,48 @@
+{
+    "query": "操作符名字是 eye_m，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "eye_m",
+    "func_desc": "The eye_m operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "n",
+            "type": "Any",
+            "desc": "Parameter n"
+        },
+        {
+            "name": "m",
+            "type": "Any",
+            "desc": "Parameter m"
+        },
+        {
+            "name": "dtype",
+            "type": "torch.Tensor",
+            "desc": "Parameter dtype"
+        },
+        {
+            "name": "layout",
+            "type": "torch.Tensor",
+            "desc": "Parameter layout"
+        },
+        {
+            "name": "device",
+            "type": "Any",
+            "desc": "Parameter device"
+        },
+        {
+            "name": "pin_memory",
+            "type": "torch.Tensor",
+            "desc": "Parameter pin_memory"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.runtime import device, torch_device_fn\nfrom flag_gems.utils import libentry\n\nlogger = logging.getLogger(__name__)\ndevice_ = device\n\n\n@libentry()\n@triton.jit\ndef eye_kernel(\n    out_ptr,\n    N,\n    M,\n    BLOCK_i: tl.constexpr,\n    BLOCK_j: tl.constexpr,\n):\n    pid_i = tl.program_id(0)  # block id\n    off_i = pid_i * BLOCK_i + tl.arange(0, BLOCK_i)\n    mask_i = off_i < N\n\n    pid_j = tl.program_id(1)  # block id\n    off_j = pid_j * BLOCK_j + tl.arange(0, BLOCK_j)\n    mask_j = off_j < M\n\n    val = tl.where(off_i[:, None] == off_j[None, :], 1.0, 0.0)\n    mask = mask_i[:, None] & mask_j[None, :]\n    off_ij = off_i[:, None] * M + off_j[None, :]\n\n    tl.store(out_ptr + off_ij, val, mask=mask)\n\n\ndef eye_m(n, m, *, dtype=None, layout=torch.strided, device=None, pin_memory=None):\n    \"\"\"\n    Triton-based implementation of torch.eye_m(n, m), using 2D tiles to split the matrix into blocks.\n    \"\"\"\n    logger.debug(\"GEMS EYE_M\")\n    if dtype is None:\n        dtype = torch.get_default_dtype()\n    if device is None:\n        device = torch.device(device_.name)\n    if layout != torch.strided:\n        raise ValueError(\"Currently only strided layout is supported for eye_m.\")\n\n    out = torch.empty(\n        (n, m), dtype=dtype, device=device, layout=layout, pin_memory=pin_memory\n    )\n    BLOCK_SIZE = 32\n    grid = (triton.cdiv(n, BLOCK_SIZE), triton.cdiv(m, BLOCK_SIZE))\n\n    with torch_device_fn.device(device):\n        eye_kernel[grid](\n            out,\n            n,\n            m,\n            BLOCK_SIZE,\n            BLOCK_SIZE,\n        )\n    return out",
+    "torch_kernel_code": "import torch\n\ndef eye_m(n, m, *, dtype=None, layout=torch.strided, device=None, pin_memory=None):\n    return torch.eye_m(n, m, dtype, layout, device, pin_memory)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"eye_m\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_eye_m(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.eye_m(ref_x)\n    res_out = bench.triton.eye_m(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}

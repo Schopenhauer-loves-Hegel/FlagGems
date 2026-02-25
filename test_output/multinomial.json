@@ -1,0 +1,38 @@
+{
+    "query": "操作符名字是 multinomial，是一个 general 算子，处理硬件是 Nvidia。",
+    "kernel_name": "multinomial",
+    "func_desc": "The multinomial operator",
+    "func_type": "general",
+    "gpu": "nvidia",
+    "input_args": [
+        {
+            "name": "prob",
+            "type": "Any",
+            "desc": "Parameter prob"
+        },
+        {
+            "name": "n_samples",
+            "type": "Any",
+            "desc": "Parameter n_samples"
+        },
+        {
+            "name": "with_replacement",
+            "type": "bool",
+            "desc": "Parameter with_replacement"
+        },
+        {
+            "name": "gen",
+            "type": "Any",
+            "desc": "Parameter gen"
+        }
+    ],
+    "output_args": [
+        {
+            "type": "torch.Tensor",
+            "desc": "The output tensor"
+        }
+    ],
+    "triton_kernel_code": "import logging\n\nimport torch\nimport triton\nimport triton.language as tl\n\nfrom flag_gems.utils import libentry\nfrom flag_gems.utils.random_utils import philox_backend_seed_offset, uniform\n\n\n@libentry()\n@triton.jit(do_not_specialize=[\"K\", \"N\", \"philox_seed\", \"philox_offset\"])\ndef multinomial_with_replacement(\n    cdf_ptr, out_ptr, K, N, philox_seed, philox_offset, NBLOCK: tl.constexpr = 128\n):\n    # The computation is arranged in a 2d grid of blocks, each producing\n    # a batch of samples for a particular distribution.\n    #            <------------------- grid.x --------------------->\n    #           |   dist0.batch0 | dist0.batch1 | dist0.batch2 ...\n    #   grid.y  |   dist1.batch0 | dist1.batch1 | dist1.batch2 ...\n    #           |   dist2.batch0 | dist2.batch1 | dist2.batch2 ...\n    y_off = tl.program_id(1) * N\n    n = tl.program_id(0) * NBLOCK + tl.arange(0, NBLOCK)\n    rv, _, _, _ = uniform(philox_seed, philox_offset, y_off + n)\n\n    # Do a binary search for each random number on the cumulative probabilities.\n    # Each random number always selects the leftmost index of the data greater\n    # than or equal to itself. However, this is likely to give a wrong result\n    # in case the first probability is zero which is not expected to selected.\n    # This error happens when the tossed random number is also zero. To avoid\n    # this mistake, we simply perturb random variable with a small number.\n    rv += 0.0001\n    rv = tl.where(rv > 0.9999, 0.9999, rv)\n\n    cdf_ptr += tl.program_id(1) * K\n    start = tl.zeros((NBLOCK,), dtype=tl.int32)\n    end = tl.zeros((NBLOCK,), dtype=tl.int32) + K - 1\n    steps = tl.math.log2(K.to(tl.float32)).to(tl.int32) + 1\n    for _ in range(steps):\n        mid = start + (end - start) // 2\n        x = tl.load(cdf_ptr + mid, mask=n < N)\n        start = tl.where(x < rv, mid + 1, start)\n        end = tl.where(x < rv, end, mid)\n\n    # Returns the last index in case of an overflow\n    start = tl.where(start >= K, K - 1, start)\n\n    tl.store(out_ptr + y_off + n, start, mask=n < N)\n\n\ndef multinomial(prob, n_samples, with_replacement=False, *, gen=None):\n    assert prob.dtype in (torch.float16, torch.float32, torch.bfloat16, torch.float64)\n    assert 0 < prob.dim() <= 2, \"prob_dist must be 1 or 2 dim\"\n    n_categories = prob.size(-1)\n    assert n_categories <= (1 << 24), \"number of categories cannot exceed 2^24\"\n    assert (\n        with_replacement or n_samples <= n_categories\n    ), \"cannot sample n_samples > prob.size(-1) samples without replacement.\"\n\n    # Sampling without replacement\n    if (not with_replacement) or n_samples == 1:\n        # In case of with_replacement, sampling is approximated by selecing\n        # the top k indices over sorted probabilities with an exponential pertubation\n        # s = argmax( p / q ) where q ~ Exp(1)\n        q = torch.empty_like(prob).exponential_(1.0)\n        s = torch.div(prob, q, out=q)\n        if n_samples == 1:\n            return torch.argmax(s, dim=-1, keepdim=True).to(torch.int64)\n        else:\n            vals, indices = torch.topk(s, n_samples, dim=-1)\n            return indices.to(torch.int64)\n\n    from flag_gems.ops import normed_cumsum\n\n    cum_prob = normed_cumsum(prob, dim=-1)\n\n    if cum_prob.dim() == 1:\n        n_dist = 1\n        out = torch.empty((n_samples,), device=prob.device, dtype=torch.int64)\n    else:\n        n_dist = cum_prob.size(0)\n        out = torch.empty((n_dist, n_samples), device=prob.device, dtype=torch.int64)\n    # The CTA level parallelism is framed in a 2d grid of blocks with grid.y\n    # indexing into distributions and grid.x output sample batches\n    increment = n_dist * n_samples\n    philox_seed, philox_offset = philox_backend_seed_offset(increment)\n    grid = lambda META: (triton.cdiv(n_samples, META[\"NBLOCK\"]), n_dist)\n    multinomial_with_replacement[grid](\n        cum_prob, out, n_categories, n_samples, philox_seed, philox_offset\n    )\n    return out",
+    "torch_kernel_code": "import torch\n\ndef multinomial(prob, n_samples, with_replacement=False, *, gen=None):\n    return torch.multinomial(prob, n_samples, with_replacement=with_replacement, gen=gen)",
+    "test_func_code": "import bench\nfrom bench.sandbox.test.test_parametrize import parametrize, label\nfrom bench.sandbox.config import DEVICE as device\nfrom bench.sandbox.utils.accuracy_utils import gems_assert_close as assert_close\nfrom bench.sandbox.utils.accuracy_utils import to_reference\nimport torch\n\n@label(\"multinomial\")\n@parametrize(\"shape\", [(32, 32), (64, 64), (128, 128)])\n@parametrize(\"dtype\", [torch.float16, torch.float32, torch.bfloat16])\ndef test_multinomial(shape, dtype):\n    x = torch.randn(shape, dtype=dtype, device=device)\n    ref_x = to_reference(x, True)\n\n    ref_out = bench.multinomial(ref_x)\n    res_out = bench.triton.multinomial(x)\n\n    assert_close(res_out, ref_out, dtype)"
+}
