@@ -193,43 +193,14 @@ def test_perf_grouped_topk_sigmoid():
 
 
 def topk_input_fn(shape, dtype, device):
-    if len(shape) == 2 and isinstance(shape[0], (tuple, list)):
-        x_shape, k = shape
-        x = torch.randn(x_shape, device=device, dtype=dtype)
-        yield {"x": x, "k": k, "dim": -1},
-    elif len(shape) == 3:
-        m, n, k = shape
-        x = torch.randn((m, n), device=device, dtype=dtype)
-        yield {"x": x, "k": k, "dim": -1},
-    else:
-        x = torch.randn(shape, device=device, dtype=dtype)
-        k = 5 if shape[-1] > 5 else shape[-1]
-        yield {"x": x, "k": k, "dim": -1},
+    x = torch.randn(shape, device=device, dtype=dtype)
+    k = 5 if shape[-1] > 5 else shape[-1]
+    yield {"x": x, "k": k, "dim": -1},
     # TODO:  Currently only support sorted == True and only support topk in last dimension
     # if Config.bench_level == BenchLevel.COMPREHENSIVE:
     #     k = 5 if shape[0] > 5 else shape[0]
     #     yield {"x": x, "k": k, "dim": 0},
     #     yield {"x": x, "k": k, "dim": -1, "sorted": False},
-
-
-class TopKBenchmark(GenericBenchmark2DOnly):
-    def set_shapes(self, shape_file_path=None):
-        self.shapes = [
-            (64, 64),
-            (4096, 4096),
-            (10000, 256),
-            (10000, 65536),
-            (4, 128),
-            (8, 256),
-            (64, 128, 8),
-            (64, 1024, 32),
-            (64, 8192, 128),
-            (128, 32768, 256),
-            ((4, 128, 64), 5),
-            ((4, 128, 64), 64),
-            ((8, 512, 32), 32),
-            ((16, 1024, 256), 256),
-        ]
 
 
 def resolve_neg_input_fn(shape, dtype, device):
@@ -245,18 +216,9 @@ def resolve_conj_input_fn(shape, dtype, device):
     yield x.conj(),
 
 
-@pytest.mark.topk
-def test_perf_topk():
-    bench = TopKBenchmark(
-        input_fn=topk_input_fn,
-        op_name="topk",
-        dtypes=FLOAT_DTYPES,
-        torch_op=torch.topk,
-    )
-    bench.run()
-
-
 special_operations = [
+    # Sorting Operations
+    ("topk", torch.topk, FLOAT_DTYPES, topk_input_fn),
     # Complex Operations
     ("resolve_neg", torch.resolve_neg, [torch.cfloat], resolve_neg_input_fn),
     ("resolve_conj", torch.resolve_conj, [torch.cfloat], resolve_conj_input_fn),
@@ -1517,6 +1479,87 @@ def test_functional_sym_constrain_range_for_size():
         torch_op=torch.ops.aten._functional_sym_constrain_range_for_size,
         dtypes=FLOAT_DTYPES,
         input_fn=_functional_sym_constrain_range_for_size_input_fn,
+    )
+    bench.run()
+
+
+class BincountBenchmark(Benchmark):
+    """Benchmark for bincount operation."""
+
+    def __init__(self, op_name, torch_op, dtypes):
+        super().__init__(op_name=op_name, torch_op=torch_op, dtypes=dtypes)
+
+    def set_shapes(self, shape_file_path=None):
+        # Shapes represent (input_size, max_value)
+        bincount_configs = [
+            (1000, 100),
+            (10000, 100),
+            (10000, 1000),
+            (100000, 100),
+            (100000, 1000),
+            (1000000, 100),
+            (1000000, 1000),
+            (1000000, 10000),
+        ]
+        self.shapes = bincount_configs
+
+    def get_input_iter(self, cur_dtype):
+        for config in self.shapes:
+            yield from self.bincount_input_fn(config, cur_dtype, self.device)
+
+    def bincount_input_fn(self, config, dtype, device):
+        input_size, max_val = config
+        # bincount requires integer input
+        inp = torch.randint(0, max_val, (input_size,), dtype=torch.int64, device=device)
+        yield inp,
+
+
+class BincountWeightsBenchmark(Benchmark):
+    """Benchmark for bincount operation with weights."""
+
+    def __init__(self, op_name, torch_op, dtypes):
+        super().__init__(op_name=op_name, torch_op=torch_op, dtypes=dtypes)
+
+    def set_shapes(self, shape_file_path=None):
+        # Shapes represent (input_size, max_value)
+        bincount_configs = [
+            (1000, 100),
+            (10000, 100),
+            (10000, 1000),
+            (100000, 100),
+            (100000, 1000),
+            (1000000, 100),
+            (1000000, 1000),
+        ]
+        self.shapes = bincount_configs
+
+    def get_input_iter(self, cur_dtype):
+        for config in self.shapes:
+            yield from self.bincount_weights_input_fn(config, cur_dtype, self.device)
+
+    def bincount_weights_input_fn(self, config, dtype, device):
+        input_size, max_val = config
+        inp = torch.randint(0, max_val, (input_size,), dtype=torch.int64, device=device)
+        weights = torch.randn(input_size, dtype=dtype, device=device)
+        yield inp, {"weights": weights}
+
+
+@pytest.mark.bincount
+def test_perf_bincount():
+    bench = BincountBenchmark(
+        op_name="bincount",
+        torch_op=torch.bincount,
+        dtypes=[torch.int64],  # Input dtype, output is always int64
+    )
+    bench.run()
+
+
+@pytest.mark.bincount
+def test_perf_bincount_with_weights():
+    bench = BincountWeightsBenchmark(
+        op_name="bincount_with_weights",
+        torch_op=torch.bincount,
+        dtypes=FLOAT_DTYPES,
     )
     bench.run()
 
