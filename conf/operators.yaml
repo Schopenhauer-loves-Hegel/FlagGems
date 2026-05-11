@@ -2587,6 +2587,18 @@ ops:
       - NeuralNetwork
     stages:
       - beta: '5.1'
+  - id: histc
+    description: |
+      Computes the histogram of a tensor into equal width bins between `min` and `max`.
+    for:
+      - histc
+    labels:
+      - aten
+      - KernelGen
+    kind:
+      - Math
+    stages:
+      - beta: '5.1'
   - id: hstack
     description: |
       Stack tensors in sequence horizontally (column wise). This is equivalent to concatenation
@@ -4961,6 +4973,30 @@ ops:
       - Activation
     stages:
       - stable: '2.0'
+  - id: silu_and_mul_with_clamp
+    description: A custom operator in vLLM as activation function for SwiGLU.
+    for:
+      - silu_and_mul_with_clamp
+    labels:
+      - fused
+      - pointwise
+      - vLLM
+    kind:
+      - Activation
+    stages:
+      - stable: '5.1'
+  - id: silu_and_mul_with_clamp_out
+    description: A variant of `silu_and_mul_with_clamp` with an extra `out` argument.
+    for:
+      - silu_and_mul_with_clamp.out
+    labels:
+      - fused
+      - pointwise
+      - vLLM
+    kind:
+      - Activation
+    stages:
+      - stable: '5.1'
   - id: silu_backward
     description: A variant of `silu()` for backward case.
     for:
