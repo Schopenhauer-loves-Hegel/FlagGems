@@ -1096,6 +1096,18 @@ ops:
       - LinearAlg
     stages:
       - beta: '5.1'
+  - id: col2im
+    description: |
+      Combines an array of sliding local blocks into a large containing tensor.
+    for:
+      - col2im
+    labels:
+      - aten
+      - KernelGen
+    kind:
+      - Tensor
+    stages:
+      - beta: '5.1'
   - id: constant_pad_nd
     description: |
       Pads the input tensor boundaries with a constant value.
