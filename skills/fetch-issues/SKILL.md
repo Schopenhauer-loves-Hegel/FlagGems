@@ -95,13 +95,15 @@ When investigating accuracy failures:
 1. **List your issues**: `bash fetch_issues.sh`
 2. **Get test context**: `bash fetch_test_results.sh --issue-id <ID>`
    - Shows: accuracy pass/fail, test environment (PyTorch/Triton versions, GPU)
+   - **Commit ID**: 在 `FlagGems: 5.0.2+gitc27cee94` 中，`c27cee94` 就是 git commit hash
 3. **Check test run**: `bash fetch_test_results.sh --test-run-id <ID> --failed-only`
    - Shows: all failed operators in that test run
 4. **SSH to target machine** and reproduce:
    ```bash
-   # Clone repo
+   # Clone repo and checkout specific commit
    git clone https://github.com/flagos-ai/FlagGems.git
    cd FlagGems
+   git checkout <commit_id>  # e.g., c27cee94
 
    # Run specific test
    pytest tests/test_<operator>.py -v
