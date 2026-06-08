@@ -107,7 +107,7 @@ def to_copy(
     # a backend copy_ implementation that does not handle complex. Stage through CPU
     # to avoid ptpu complex copy_/view_as_real gaps.
     if x.dtype.is_complex or target_dtype.is_complex:
-        logger.debug("GEMS_SUNRISE _TO_COPY COMPLEX VIA CPU")
+        logger.debug("GEMS_SUNRISE _TO_COPY_COMPLEX_VIA_CPU")
         cpu_x = x
         if x.device.type != "cpu":
             cpu_x = _fallback_to_copy(

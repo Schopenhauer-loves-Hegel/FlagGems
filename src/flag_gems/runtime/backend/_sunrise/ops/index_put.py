@@ -264,14 +264,14 @@ _index_put_func = IndexPutFunction()
 
 
 def index_put(inp, indices, values, accumulate=False):
-    logger.debug("GEMS_SUNRISE INDEX PUT")
+    logger.debug("GEMS_SUNRISE INDEX_PUT")
 
     out = inp.clone()
     return index_put_(out, indices, values, accumulate)
 
 
 def index_put_(inp, indices, values, accumulate=False):
-    logger.debug("GEMS_SUNRISE INDEX PUT_")
+    logger.debug("GEMS_SUNRISE INDEX_PUT_")
 
     indices = list(indices)
 

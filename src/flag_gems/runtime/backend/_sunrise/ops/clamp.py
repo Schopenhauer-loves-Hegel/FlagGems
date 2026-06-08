@@ -78,7 +78,7 @@ def clamp_tensor(A, mini=None, maxi=None):
 
 
 def clamp_tensor_(A, mini=None, maxi=None):
-    logger.debug("GEMS_SUNRISE CLAMP_ TENSOR")
+    logger.debug("GEMS_SUNRISE CLAMP__TENSOR")
     if A.dtype == torch.half:
         if mini is None and maxi is None:
             raise ValueError("At least one of mini or maxi must not be None")
@@ -146,14 +146,14 @@ def clamp_func_max_f16(x, maxi):
 
 
 def clamp_min(A, mini):
-    logger.debug("GEMS_SUNRISE CLAMP MIN")
+    logger.debug("GEMS_SUNRISE CLAMP_MIN")
     if mini is None:
         raise ValueError("Mini must not be None")
     return clamp_func_min(A, mini)
 
 
 def clamp_min_(A, mini):
-    logger.debug("GEMS_SUNRISE CLAMP_ MIN")
+    logger.debug("GEMS_SUNRISE CLAMP__MIN")
     if mini is None:
         raise ValueError("Mini must not be None")
     return clamp_func_min(A, mini, out0=A)
