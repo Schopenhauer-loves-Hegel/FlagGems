@@ -1,0 +1,5 @@
+hardware_type: A100
+host: 0.0.0.0
+port: 8200
+api_key: null
+orchestrator_config: ../config_worker2.yaml

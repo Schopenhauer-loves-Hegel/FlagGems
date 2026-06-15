@@ -1,0 +1,29 @@
+# Coordinator configuration
+host: 0.0.0.0
+port: 8000
+
+# Optional API key for coordinator endpoints (null to disable)
+api_key: null
+
+# Static worker registry
+workers:
+  - id: worker-h800-01
+    url: http://10.0.1.10:8100
+    hardware_type: H800
+
+  - id: worker-a100-01
+    url: http://10.0.1.20:8100
+    hardware_type: A100
+
+# Optional: API keys for workers (worker_id -> key)
+# worker_api_keys:
+#   worker-h800-01: "secret-key-1"
+
+# Health check interval (seconds)
+poll_interval: 30
+
+# Job status polling interval (seconds)
+job_poll_interval: 15
+
+# Mark worker unhealthy after N consecutive failed health checks
+unhealthy_threshold: 3

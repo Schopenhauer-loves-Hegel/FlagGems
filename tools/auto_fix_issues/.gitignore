@@ -4,3 +4,5 @@ __pycache__/
 results/
 test_*.txt
 *.backup
+server/worker_config.yaml
+server/coordinator_config.yaml
