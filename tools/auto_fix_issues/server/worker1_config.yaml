@@ -1,0 +1,5 @@
+hardware_type: H800
+host: 0.0.0.0
+port: 8100
+api_key: null
+orchestrator_config: ../config_worker1.yaml
