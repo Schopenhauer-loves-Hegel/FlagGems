@@ -301,11 +301,11 @@ git -c user.name="taooo" -c user.email="gumptao2997@gmail.com" commit -m "Fix {{
 1. **最小修改原则** — 只改必要代码，不重构无关部分
 2. **后端隔离** — 非 NVIDIA 后端**禁止修改**共享代码（`src/flag_gems/ops/`、`src/flag_gems/fused/`），必须在 `src/flag_gems/runtime/backend/_{{GEMS_VENDOR}}/ops/` 下创建 override
 3. **测试优先修算子** — 除非确认测试本身有 bug，否则只改算子源码
-3. **必须通过 test** — accuracy test 全部通过是成功的必要条件
-4. **必须通过 benchmark** — 如果有 benchmark_cmd，也需运行成功（环境性失败可豁免）
-5. **代码格式** — 修改的 Python 文件必须通过 black + isort + flake8
-6. **禁止 pip install** — 不运行任何安装命令
-7. **工作目录** — 所有命令在 `{{WORK_DIR}}` 下执行
-8. **环境前缀** — 所有命令加 `CUDA_VISIBLE_DEVICES={{GPU_ID}} GEMS_VENDOR={{GEMS_VENDOR}}`
-9. **JSON 必须输出** — 即使失败也要输出 JSON
-10. **禁止写临时文件** — 不要将代码写到 `/tmp`
+4. **必须通过 test** — accuracy test 全部通过是成功的必要条件
+5. **必须通过 benchmark** — 如果有 benchmark_cmd，也需运行成功（环境性失败可豁免）
+6. **代码格式** — 修改的 Python 文件必须通过 black + isort + flake8
+7. **禁止 pip install** — 不运行任何安装命令
+8. **工作目录** — 所有命令在 `{{WORK_DIR}}` 下执行
+9. **环境前缀** — 所有命令加 `CUDA_VISIBLE_DEVICES={{GPU_ID}} GEMS_VENDOR={{GEMS_VENDOR}}`
+10. **JSON 必须输出** — 即使失败也要输出 JSON
+11. **禁止写临时文件** — 不要将代码写到 `/tmp`
