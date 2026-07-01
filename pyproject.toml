@@ -194,6 +194,11 @@ example = [
     "transformers>=4.40.2",
 ]
 
+# Development tools
+dev = [
+    "ruamel.yaml>=0.17",
+]
+
 [project.urls]
 
 Repository = "https://github.com/flagos-ai/FlagGems"
