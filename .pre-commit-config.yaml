@@ -30,3 +30,13 @@ repos:
   hooks:
     - id: black
     - id: black-jupyter
+
+- repo: local
+  hooks:
+    - id: sort-registrations
+      name: Sort registrations alphabetically
+      entry: python tools/sort_registrations.py
+      language: python
+      additional_dependencies: ["ruamel.yaml>=0.17"]
+      pass_filenames: false
+      files: ^(conf/operators\.yaml|src/flag_gems/__init__\.py|src/flag_gems/ops/__init__\.py)$
