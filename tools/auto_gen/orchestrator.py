@@ -1115,6 +1115,52 @@ def run(args):
                 )
 
                 if success:
+                    # Sort operator registrations to ensure alphabetical order
+                    try:
+                        sort_script = os.path.join(
+                            os.path.dirname(__file__), "..", "sort_registrations.py"
+                        )
+                        sort_result = subprocess.run(
+                            [sys.executable, sort_script, "--repo-root", worktree_path],
+                            capture_output=True,
+                            text=True,
+                            timeout=30,
+                        )
+                        if sort_result.returncode == 0:
+                            # Amend the commit if sort made changes — only stage the
+                            # specific files sort_registrations.py is allowed to modify
+                            sort_targets = [
+                                "conf/operators.yaml",
+                                "src/flag_gems/ops/__init__.py",
+                                "src/flag_gems/__init__.py",
+                            ]
+                            diff_result = subprocess.run(
+                                ["git", "diff", "--quiet", "--"] + sort_targets,
+                                cwd=worktree_path,
+                                capture_output=True,
+                            )
+                            if diff_result.returncode != 0:
+                                subprocess.run(
+                                    ["git", "add", "--"] + sort_targets,
+                                    cwd=worktree_path,
+                                    capture_output=True,
+                                )
+                                subprocess.run(
+                                    ["git", "commit", "--amend", "--no-edit"],
+                                    cwd=worktree_path,
+                                    capture_output=True,
+                                )
+                                logger.info(
+                                    f"[SORT] Amended commit with sorted registrations for {operator}"
+                                )
+                        else:
+                            logger.warning(
+                                f"[SORT] Failed to sort registrations for {operator} (non-fatal): "
+                                f"{sort_result.stderr.strip()}"
+                            )
+                    except Exception as e:
+                        logger.warning(f"[SORT] Error sorting registrations: {e}")
+
                     logger.info(
                         f"[SUCCESS] {operator} (attempt {attempt + 1}, {duration:.0f}s)"
                     )
