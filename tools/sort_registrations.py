@@ -234,6 +234,166 @@ def sort_full_config(init_path: Path, check_only: bool = False) -> bool:
     return True
 
 
+def sort_vendor_init(init_path: Path, check_only: bool = False) -> bool:
+    """Sort a vendor backend ops/__init__.py: both import lines and __all__ list."""
+    content = init_path.read_text()
+
+    # --- Sort import lines ---
+    # Match lines like: from .xxx import yyy
+    import_lines = []
+    other_lines_before = []
+    other_lines_after = []
+    in_imports = False
+    past_imports = False
+
+    for line in content.splitlines(keepends=True):
+        if re.match(r"^from \.\w+ import ", line):
+            in_imports = True
+            import_lines.append(line)
+        elif in_imports and not past_imports:
+            # Blank line or continuation right after imports — check if it's a
+            # multi-line import (parenthesized)
+            if line.strip() == "" and import_lines:
+                # Gap between import block and __all__ — end of imports
+                past_imports = True
+                other_lines_after.append(line)
+            elif line.strip().startswith(")"):
+                # End of multi-line import
+                import_lines.append(line)
+            elif not line.strip().startswith("from") and import_lines:
+                # Continuation of multi-line import (indented names)
+                import_lines.append(line)
+            else:
+                past_imports = True
+                other_lines_after.append(line)
+        elif not in_imports:
+            other_lines_before.append(line)
+        else:
+            other_lines_after.append(line)
+
+    if not import_lines:
+        # No imports to sort — just check __all__
+        return sort_ops_init_all(init_path, check_only)
+
+    # Group multi-line imports: collect "from .xxx import (\n  ...\n)" as one block
+    import_blocks = []  # (sort_key, block_text)
+    i = 0
+    raw_imports = import_lines
+    while i < len(raw_imports):
+        line = raw_imports[i]
+        match = re.match(r"^from \.(\w+) import ", line)
+        if match:
+            module = match.group(1)
+            if "(" in line and ")" not in line:
+                # Multi-line import — collect until closing )
+                block = [line]
+                i += 1
+                while i < len(raw_imports) and ")" not in raw_imports[i]:
+                    block.append(raw_imports[i])
+                    i += 1
+                if i < len(raw_imports):
+                    block.append(raw_imports[i])
+                    i += 1
+                import_blocks.append((module, "".join(block)))
+            else:
+                import_blocks.append((module, line))
+                i += 1
+        else:
+            i += 1
+
+    sorted_imports = sorted(import_blocks, key=lambda x: x[0])
+    imports_sorted = sorted_imports == import_blocks
+
+    # --- Sort __all__ list ---
+    after_text = "".join(other_lines_after)
+    all_match = re.search(r"(__all__\s*=\s*\[)(.*?)(\n\])", after_text, re.DOTALL)
+
+    all_sorted_ok = True
+    if all_match:
+        entries = []  # (sort_key, original_line)
+        for aline in all_match.group(2).split("\n"):
+            stripped = aline.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("#"):
+                # Comment line — extract name if it looks like a commented-out entry
+                m = re.search(r'"([^"]+)"', stripped)
+                sort_key = m.group(1) if m else None
+                entries.append((sort_key, aline))
+            elif stripped.startswith('"'):
+                m = re.match(r'"([^"]+)"', stripped)
+                if m:
+                    entries.append((m.group(1), aline))
+
+        sortable = [(k, v) for k, v in entries if k is not None]
+        unsortable = [(k, v) for k, v in entries if k is None]
+        if unsortable:
+            print(
+                f"❌ Error: {len(unsortable)} entries in {init_path} __all__ could not be parsed:"
+            )
+            for _, line in unsortable:
+                print(f"    - {line.strip()}")
+            print("    Please fix them manually before sorting.")
+            return False
+        sorted_sortable = sorted(sortable, key=lambda x: x[0])
+        all_sorted_ok = sorted_sortable == sortable
+        sorted_entries = sorted_sortable
+    else:
+        sorted_entries = []
+        sortable = []
+        all_sorted_ok = True
+
+    is_sorted = imports_sorted and all_sorted_ok
+
+    if check_only:
+        if not imports_sorted:
+            print(f"❌ {init_path} imports are not sorted")
+            for idx, (u, s) in enumerate(zip(import_blocks, sorted_imports)):
+                if u[0] != s[0]:
+                    print(
+                        f"  First mismatch at position {idx}: '{u[0]}' should be '{s[0]}'"
+                    )
+                    break
+        if not all_sorted_ok:
+            print(f"❌ {init_path} __all__ is not sorted")
+            for idx, (u, s) in enumerate(zip(sortable, sorted_sortable)):
+                if u[0] != s[0]:
+                    print(
+                        f"  First mismatch at position {idx}: '{u[0]}' should be '{s[0]}'"
+                    )
+                    break
+        if is_sorted:
+            print(f"✅ {init_path} already sorted")
+        return is_sorted
+
+    if is_sorted:
+        print(f"✅ {init_path} already sorted")
+        return True
+
+    # Reconstruct file
+    new_content = "".join(other_lines_before)
+    new_content += "".join(text for _, text in sorted_imports)
+
+    if all_match:
+        # Rebuild __all__ sorted, preserving original line formatting
+        before_all = after_text[: all_match.start()]
+        after_all = after_text[all_match.end() :]
+        new_all_body = "\n" + "\n".join(line for _, line in sorted_entries)
+        new_content += (
+            before_all
+            + all_match.group(1)
+            + new_all_body
+            + all_match.group(3)
+            + after_all
+        )
+    else:
+        new_content += "".join(other_lines_after)
+
+    init_path.write_text(new_content)
+    print(f"✅ Sorted {init_path}")
+    return True
+
+
 def sort_all(repo_root: Path, check_only: bool = False) -> bool:
     """Sort all registration files under the given repo root.
 
@@ -292,7 +452,18 @@ def main():
         default=None,
         help="Path to repo root (default: infer from script location)",
     )
+    parser.add_argument(
+        "--vendor-init",
+        type=Path,
+        default=None,
+        help="Path to a vendor backend ops/__init__.py to sort (imports + __all__)",
+    )
     args = parser.parse_args()
+
+    # --vendor-init mode: sort a single vendor __init__.py and exit
+    if args.vendor_init:
+        ok = sort_vendor_init(args.vendor_init, check_only=args.check)
+        sys.exit(0 if ok else 1)
 
     repo_root = args.repo_root or Path(__file__).parent.parent
 
