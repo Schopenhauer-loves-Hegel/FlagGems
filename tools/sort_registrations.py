@@ -234,21 +234,12 @@ def sort_full_config(init_path: Path, check_only: bool = False) -> bool:
     return True
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Sort FlagGems registrations alphabetically",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
-    )
-    parser.add_argument(
-        "--check", action="store_true", help="Only check, do not modify"
-    )
-    args = parser.parse_args()
+def sort_all(repo_root: Path, check_only: bool = False) -> bool:
+    """Sort all registration files under the given repo root.
 
-    # Find repo root
-    script_dir = Path(__file__).parent
-    repo_root = script_dir.parent  # tools/sort_registrations.py -> repo root
-
+    Returns True if all files are sorted (or were successfully fixed).
+    Can be imported by other tools (e.g. orchestrator) to sort worktree files.
+    """
     files_to_check = [
         (repo_root / "conf" / "operators.yaml", sort_operators_yaml, "operators.yaml"),
         (
@@ -270,30 +261,53 @@ def main():
             continue
 
         try:
-            sorted_ok = sort_func(file_path, check_only=args.check)
+            sorted_ok = sort_func(file_path, check_only=check_only)
             if not sorted_ok:
                 all_sorted = False
-                if not args.check:
-                    # Stop on first error when actually modifying files
+                if not check_only:
                     print("\n❌ Stopped due to errors. Fix issues and re-run.")
-                    sys.exit(1)
+                    return False
         except Exception as e:
             print(f"❌ Error processing {name}: {e}")
             import traceback
 
             traceback.print_exc()
-            all_sorted = False
-            sys.exit(1)
+            return False
 
+    return all_sorted
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Sort FlagGems registrations alphabetically",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    parser.add_argument(
+        "--check", action="store_true", help="Only check, do not modify"
+    )
+    parser.add_argument(
+        "--repo-root",
+        type=Path,
+        default=None,
+        help="Path to repo root (default: infer from script location)",
+    )
+    args = parser.parse_args()
+
+    repo_root = args.repo_root or Path(__file__).parent.parent
+
+    ok = sort_all(repo_root, check_only=args.check)
     if args.check:
-        if all_sorted:
+        if ok:
             print("\n✅ All files are properly sorted")
             sys.exit(0)
         else:
             print("\n❌ Some files are not sorted. Run without --check to fix.")
             sys.exit(1)
-    else:
+    elif ok:
         print("\n✅ Done")
+    else:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
