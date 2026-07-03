@@ -1126,6 +1126,36 @@ def run(args):
                             text=True,
                             timeout=30,
                         )
+
+                        # Also sort any changed vendor __init__.py files
+                        if vendor:
+                            vendor_init_result = subprocess.run(
+                                [
+                                    "git",
+                                    "diff",
+                                    "--name-only",
+                                    base_branch,
+                                    "--",
+                                    "src/flag_gems/runtime/backend/*/ops/__init__.py",
+                                    "src/flag_gems/runtime/backend/*/*/ops/__init__.py",
+                                ],
+                                cwd=worktree_path,
+                                capture_output=True,
+                                text=True,
+                            )
+                            for vf in vendor_init_result.stdout.strip().splitlines():
+                                if vf:
+                                    subprocess.run(
+                                        [
+                                            sys.executable,
+                                            sort_script,
+                                            "--vendor-init",
+                                            os.path.join(worktree_path, vf),
+                                        ],
+                                        capture_output=True,
+                                        timeout=10,
+                                    )
+
                         if sort_result.returncode == 0:
                             # Amend the commit if sort made changes — only stage the
                             # specific files sort_registrations.py is allowed to modify
@@ -1134,6 +1164,13 @@ def run(args):
                                 "src/flag_gems/ops/__init__.py",
                                 "src/flag_gems/__init__.py",
                             ]
+                            # Also include changed vendor __init__.py
+                            if vendor:
+                                for (
+                                    vf
+                                ) in vendor_init_result.stdout.strip().splitlines():
+                                    if vf:
+                                        sort_targets.append(vf)
                             diff_result = subprocess.run(
                                 ["git", "diff", "--quiet", "--"] + sort_targets,
                                 cwd=worktree_path,
