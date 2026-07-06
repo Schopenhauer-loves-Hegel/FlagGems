@@ -11,9 +11,10 @@ import subprocess
 import sys
 import time
 from collections import deque
-from datetime import datetime, timezone
 
 from device_manager import DeviceManager
+from summary import Summary, utc_timestamp
+from timeline import generate_timeline
 from validate_operator import validate_operator
 
 try:
@@ -22,15 +23,6 @@ except ImportError:
     yaml = None
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Helper functions
-# ---------------------------------------------------------------------------
-
-
-def utc_timestamp() -> str:
-    """Get current UTC timestamp in ISO format."""
-    return datetime.now(timezone.utc).isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -495,129 +487,6 @@ def parse_cc_result(
     }
 
 
-def generate_timeline(jsonl_path: str, operator: str) -> str | None:
-    """Generate a human-readable timeline from a CC stream-json log.
-
-    Writes a .timeline.txt file next to the .jsonl and returns its path.
-    """
-    timeline_path = jsonl_path.replace(".jsonl", ".timeline.txt")
-    try:
-        events = []
-        with open(jsonl_path, "r", errors="replace") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    events.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
-
-        out: list[str] = []
-        step = 0
-
-        def _format_tool_use(name: str, inp: dict) -> str:
-            if name == "Bash":
-                return inp.get("command", "")
-            elif name in ("Read", "Write"):
-                return inp.get("file_path", "")
-            elif name == "Edit":
-                s = inp.get("file_path", "")
-                old = inp.get("old_string", "")
-                new = inp.get("new_string", "")
-                return f"{s}\n--- old ---\n{old}\n+++ new +++\n{new}"
-            elif name in ("Grep", "Glob"):
-                return f"pattern={inp.get('pattern', '')}  path={inp.get('path', '')}"
-            else:
-                return json.dumps(inp, ensure_ascii=False)
-
-        for event in events:
-            etype = event.get("type", "")
-
-            if etype == "system" and event.get("subtype") == "init":
-                out.append(f"=== {operator} ===")
-                out.append(f"Session: {event.get('session_id', '?')}")
-                out.append(f"Model: {event.get('model', '?')}")
-                out.append("")
-                continue
-
-            if etype == "result":
-                step += 1
-                out.append(f"[{step}] ✅ Result:")
-                out.append(event.get("result", ""))
-                out.append("")
-                continue
-
-            if etype == "user":
-                # Extract tool result output
-                tool_result = event.get("tool_use_result")
-                if isinstance(tool_result, dict):
-                    output = tool_result.get("stdout", "") or tool_result.get(
-                        "stderr", ""
-                    )
-                    if output:
-                        out.append("    ↳ Output:")
-                        out.append(str(output))
-                        out.append("")
-                        continue
-                # Fallback: check message.content for tool_result entries
-                contents = event.get("message", {}).get("content", [])
-                if isinstance(contents, list):
-                    for c in contents:
-                        if isinstance(c, dict) and c.get("type") == "tool_result":
-                            content_val = c.get("content", "")
-                            if content_val:
-                                out.append("    ↳ Output:")
-                                out.append(str(content_val))
-                                out.append("")
-                            break
-                continue
-
-            if etype != "assistant":
-                continue
-
-            contents = event.get("message", {}).get("content", [])
-            if not isinstance(contents, list):
-                continue
-
-            for content in contents:
-                if not isinstance(content, dict):
-                    continue
-                ctype = content.get("type", "")
-
-                if ctype == "thinking":
-                    step += 1
-                    out.append(f"[{step}] 🤔 Thinking:")
-                    out.append(content.get("thinking", ""))
-                    out.append("")
-
-                elif ctype == "text":
-                    text = content.get("text", "")
-                    if text.strip():
-                        step += 1
-                        out.append(f"[{step}] 💬 Text:")
-                        out.append(text)
-                        out.append("")
-
-                elif ctype == "tool_use":
-                    step += 1
-                    name = content.get("name", "?")
-                    inp = content.get("input", {})
-                    out.append(f"[{step}] 🔧 {name}:")
-                    out.append(_format_tool_use(name, inp))
-                    out.append("")
-
-        with open(timeline_path, "w") as f:
-            f.write("\n".join(out))
-
-        logger.info(f"Generated timeline for {operator}: {timeline_path}")
-        return timeline_path
-
-    except Exception as e:
-        logger.warning(f"Failed to generate timeline for {operator}: {e}")
-        return None
-
-
 def schedule_retry_or_fail(
     summary,
     queue: deque,
@@ -691,103 +560,12 @@ def schedule_retry_or_fail(
 
 
 # ---------------------------------------------------------------------------
-# Summary management
-# ---------------------------------------------------------------------------
-
-
-class Summary:
-    """Manages the summary.json file with real-time updates."""
-
-    def __init__(self, path: str):
-        self.path = path
-        self.data = {
-            "start_time": utc_timestamp(),
-            "end_time": None,
-            "summary": {
-                "total": 0,
-                "success": 0,
-                "failed": 0,
-                "in_progress": 0,
-            },
-            "operators": {},
-        }
-        self._save()
-
-    def add_operator(self, operator: str, gpu_id: int, attempt: int):
-        """Record that an operator task has started."""
-        self.data["operators"][operator] = {
-            "status": "in_progress",
-            "gpu_id": gpu_id,
-            "attempt": attempt,
-            "worktree_path": None,
-            "branch": None,
-            "start_time": utc_timestamp(),
-            "end_time": None,
-            "duration_seconds": None,
-            "accuracy_passed": None,
-            "error_message": None,
-            "cc_result": None,
-        }
-        self._recount()
-        self._save()
-
-    def update_operator(self, operator: str, **kwargs):
-        """Update fields for an operator."""
-        if operator in self.data["operators"]:
-            self.data["operators"][operator].update(kwargs)
-            self._recount()
-            self._save()
-
-    def finalize(self):
-        """Mark the run as complete."""
-        self.data["end_time"] = utc_timestamp()
-        self._save()
-
-    def _recount(self):
-        """Recount summary statistics."""
-        ops = self.data["operators"]
-        self.data["summary"]["total"] = len(ops)
-        self.data["summary"]["success"] = sum(
-            1 for v in ops.values() if v["status"] == "success"
-        )
-        self.data["summary"]["failed"] = sum(
-            1 for v in ops.values() if v["status"] in ("failed", "cancelled")
-        )
-        self.data["summary"]["in_progress"] = sum(
-            1 for v in ops.values() if v["status"] in ("in_progress", "retrying")
-        )
-
-    def _save(self):
-        """Write summary to disk."""
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        with open(self.path, "w") as f:
-            json.dump(self.data, f, indent=2, ensure_ascii=False)
-
-
-# ---------------------------------------------------------------------------
 # Main orchestrator
 # ---------------------------------------------------------------------------
 
 
-def run(args):
-    """Main orchestration loop."""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = args.config or os.path.join(script_dir, "config.yaml")
-    config = load_config(config_path)
-
-    flaggems_dir = config.get(
-        "flaggems_dir", os.path.dirname(os.path.dirname(script_dir))
-    )
-    python_path = config.get("python_path", sys.executable)
-    results_dir = os.path.join(script_dir, config.get("results_dir", "results"))
-    log_dir = os.path.join(results_dir, "logs")
-    summary_path = os.path.join(results_dir, "summary.json")
-    max_retries = config.get("max_retries", 3)
-    timeout_per_op = config.get("timeout_per_op", 1800) or 0
-    poll_interval = config.get("poll_interval", 10)
-    vendor = config.get("vendor")
-    base_branch = config.get("base_branch", "master")
-
+def ensure_pre_commit(python_path: str, flaggems_dir: str, dry_run: bool = False):
+    """Check, install, and warm pre-commit hooks."""
     # Check pre-commit availability
     if not check_pre_commit(python_path):
         print("\n⚠️  pre-commit is not installed in your Python environment.")
@@ -822,7 +600,7 @@ def run(args):
         )
 
     # Pre-warm hook environments (downloads to ~/.cache/pre-commit/)
-    if not args.dry_run:
+    if not dry_run:
         logger.info(
             "Pre-warming pre-commit hook environments"
             " (first time may take a few minutes)..."
@@ -840,6 +618,113 @@ def run(args):
             logger.warning(
                 f"Pre-commit hook warm-up failed (non-fatal): {warm_result.stderr.strip()}"
             )
+
+
+def sort_and_amend_commit(
+    worktree_path: str, operator: str, vendor: str, base_branch: str
+):
+    """Sort operator registrations and amend the commit if changes were needed."""
+    try:
+        sort_script = os.path.join(
+            os.path.dirname(__file__), "..", "sort_registrations.py"
+        )
+        sort_result = subprocess.run(
+            [sys.executable, sort_script, "--repo-root", worktree_path],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        # Also sort any changed vendor __init__.py files
+        if vendor:
+            vendor_init_result = subprocess.run(
+                [
+                    "git",
+                    "diff",
+                    "--name-only",
+                    base_branch,
+                    "--",
+                    "src/flag_gems/runtime/backend/*/ops/__init__.py",
+                    "src/flag_gems/runtime/backend/*/*/ops/__init__.py",
+                ],
+                cwd=worktree_path,
+                capture_output=True,
+                text=True,
+            )
+            for vf in vendor_init_result.stdout.strip().splitlines():
+                if vf:
+                    subprocess.run(
+                        [
+                            sys.executable,
+                            sort_script,
+                            "--vendor-init",
+                            os.path.join(worktree_path, vf),
+                        ],
+                        capture_output=True,
+                        timeout=10,
+                    )
+
+        if sort_result.returncode == 0:
+            # Amend the commit if sort made changes — only stage the
+            # specific files sort_registrations.py is allowed to modify
+            sort_targets = [
+                "conf/operators.yaml",
+                "src/flag_gems/ops/__init__.py",
+                "src/flag_gems/__init__.py",
+            ]
+            # Also include changed vendor __init__.py
+            if vendor:
+                for vf in vendor_init_result.stdout.strip().splitlines():
+                    if vf:
+                        sort_targets.append(vf)
+            diff_result = subprocess.run(
+                ["git", "diff", "--quiet", "--"] + sort_targets,
+                cwd=worktree_path,
+                capture_output=True,
+            )
+            if diff_result.returncode != 0:
+                subprocess.run(
+                    ["git", "add", "--"] + sort_targets,
+                    cwd=worktree_path,
+                    capture_output=True,
+                )
+                subprocess.run(
+                    ["git", "commit", "--amend", "--no-edit"],
+                    cwd=worktree_path,
+                    capture_output=True,
+                )
+                logger.info(
+                    f"[SORT] Amended commit with sorted registrations for {operator}"
+                )
+        else:
+            logger.warning(
+                f"[SORT] Failed to sort registrations for {operator} (non-fatal): "
+                f"{sort_result.stderr.strip()}"
+            )
+    except Exception as e:
+        logger.warning(f"[SORT] Error sorting registrations: {e}")
+
+
+def run(args):
+    """Main orchestration loop."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = args.config or os.path.join(script_dir, "config.yaml")
+    config = load_config(config_path)
+
+    flaggems_dir = config.get(
+        "flaggems_dir", os.path.dirname(os.path.dirname(script_dir))
+    )
+    python_path = config.get("python_path", sys.executable)
+    results_dir = os.path.join(script_dir, config.get("results_dir", "results"))
+    log_dir = os.path.join(results_dir, "logs")
+    summary_path = os.path.join(results_dir, "summary.json")
+    max_retries = config.get("max_retries", 3)
+    timeout_per_op = config.get("timeout_per_op", 1800) or 0
+    poll_interval = config.get("poll_interval", 10)
+    vendor = config.get("vendor")
+    base_branch = config.get("base_branch", "master")
+
+    ensure_pre_commit(python_path, flaggems_dir, dry_run=args.dry_run)
 
     # Select template based on mode
     if vendor:
@@ -1115,88 +1000,7 @@ def run(args):
                 )
 
                 if success:
-                    # Sort operator registrations to ensure alphabetical order
-                    try:
-                        sort_script = os.path.join(
-                            os.path.dirname(__file__), "..", "sort_registrations.py"
-                        )
-                        sort_result = subprocess.run(
-                            [sys.executable, sort_script, "--repo-root", worktree_path],
-                            capture_output=True,
-                            text=True,
-                            timeout=30,
-                        )
-
-                        # Also sort any changed vendor __init__.py files
-                        if vendor:
-                            vendor_init_result = subprocess.run(
-                                [
-                                    "git",
-                                    "diff",
-                                    "--name-only",
-                                    base_branch,
-                                    "--",
-                                    "src/flag_gems/runtime/backend/*/ops/__init__.py",
-                                    "src/flag_gems/runtime/backend/*/*/ops/__init__.py",
-                                ],
-                                cwd=worktree_path,
-                                capture_output=True,
-                                text=True,
-                            )
-                            for vf in vendor_init_result.stdout.strip().splitlines():
-                                if vf:
-                                    subprocess.run(
-                                        [
-                                            sys.executable,
-                                            sort_script,
-                                            "--vendor-init",
-                                            os.path.join(worktree_path, vf),
-                                        ],
-                                        capture_output=True,
-                                        timeout=10,
-                                    )
-
-                        if sort_result.returncode == 0:
-                            # Amend the commit if sort made changes — only stage the
-                            # specific files sort_registrations.py is allowed to modify
-                            sort_targets = [
-                                "conf/operators.yaml",
-                                "src/flag_gems/ops/__init__.py",
-                                "src/flag_gems/__init__.py",
-                            ]
-                            # Also include changed vendor __init__.py
-                            if vendor:
-                                for (
-                                    vf
-                                ) in vendor_init_result.stdout.strip().splitlines():
-                                    if vf:
-                                        sort_targets.append(vf)
-                            diff_result = subprocess.run(
-                                ["git", "diff", "--quiet", "--"] + sort_targets,
-                                cwd=worktree_path,
-                                capture_output=True,
-                            )
-                            if diff_result.returncode != 0:
-                                subprocess.run(
-                                    ["git", "add", "--"] + sort_targets,
-                                    cwd=worktree_path,
-                                    capture_output=True,
-                                )
-                                subprocess.run(
-                                    ["git", "commit", "--amend", "--no-edit"],
-                                    cwd=worktree_path,
-                                    capture_output=True,
-                                )
-                                logger.info(
-                                    f"[SORT] Amended commit with sorted registrations for {operator}"
-                                )
-                        else:
-                            logger.warning(
-                                f"[SORT] Failed to sort registrations for {operator} (non-fatal): "
-                                f"{sort_result.stderr.strip()}"
-                            )
-                    except Exception as e:
-                        logger.warning(f"[SORT] Error sorting registrations: {e}")
+                    sort_and_amend_commit(worktree_path, operator, vendor, base_branch)
 
                     logger.info(
                         f"[SUCCESS] {operator} (attempt {attempt + 1}, {duration:.0f}s)"
