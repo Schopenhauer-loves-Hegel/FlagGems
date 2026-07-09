@@ -316,6 +316,7 @@ fi
   labels:
     - aten
     - pointwise  # 或其他类别：reduction, norm, blas 等
+    - KernelGen
   kind:
     - Math  # 或 NeuralNetwork, Tensor 等
   stages:
@@ -328,6 +329,7 @@ fi
   labels:
     - aten
     - pointwise
+    - KernelGen
   kind:
     - Math
 
@@ -338,6 +340,7 @@ fi
   labels:
     - aten
     - pointwise
+    - KernelGen
   kind:
     - Math
 ```
@@ -346,7 +349,7 @@ fi
 - `id`: 唯一标识符（通常是算子名）
 - `description`: 功能描述（参考 PyTorch 官方文档）
 - `for`: ATen 算子名列表（注意 `.out` 后缀格式）
-- `labels`: 分类标签（`aten`, `pointwise`, `reduction` 等）
+- `labels`: 分类标签（`aten`, `pointwise`, `reduction` 等 + `KernelGen` 必须包含）
 - `kind`: 算子类型（`Math`, `NeuralNetwork`, `Tensor` 等）
 - `stages`: 成熟度阶段（`beta` 或 `stable`，带版本号）
 
