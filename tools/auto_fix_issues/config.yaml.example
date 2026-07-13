@@ -9,6 +9,19 @@ python_path: /path/to/python
 # Claude Code executable
 claude_bin: claude
 
+# Git author identity for the fix commits produced by each agent.
+# Used to populate the commit's user.name / user.email (see templates/fix_issue.md,
+# which renders `git -c user.name="{{GIT_AUTHOR_NAME}}" -c user.email="{{GIT_AUTHOR_EMAIL}}" commit ...`).
+# Set these to YOUR GitHub identity so commits attribute correctly. For a GitHub
+# account, the recommended email is the privacy-preserving noreply form:
+#   "<numeric-user-id>+<login>@users.noreply.github.com"
+# (find your numeric id at https://api.github.com/users/<login>). A plain email
+# works too, but commits won't link to your GitHub profile unless that email is
+# verified on the account. Both fields fall back to a neutral "FlagGems Bot" /
+# "bot@flaggems.invalid" if omitted.
+git_author_name: your-github-username
+git_author_email: your-github-username@users.noreply.github.com
+
 # Maximum retry attempts per issue (on failure)
 max_retries: 2
 

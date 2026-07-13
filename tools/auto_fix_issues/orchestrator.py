@@ -208,6 +208,8 @@ def launch_cc(
         "GEMS_VENDOR": config.get("gems_vendor", "nvidia"),
         "OPERATORS": ", ".join(issue.get("operators", [])),
         "FILES": ", ".join(issue.get("files", [])),
+        "GIT_AUTHOR_NAME": config.get("git_author_name", "FlagGems Bot"),
+        "GIT_AUTHOR_EMAIL": config.get("git_author_email", "bot@flaggems.invalid"),
     }
     prompt = render_template(template_path, variables)
 

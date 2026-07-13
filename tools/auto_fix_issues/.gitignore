@@ -5,3 +5,14 @@ __pycache__/
 results/
 test_*.txt
 *.backup
+
+# Per-run artifacts (generated configs/issue lists, reports, helper scripts,
+# and recheck outputs) — not part of the tool itself, so keep them out of PRs.
+config_retry*.yaml
+issues_retry*.yaml
+issues_mtt.yaml*
+output.md
+status.sh
+recheck.sh
+recheck_results/
+LEARN.md

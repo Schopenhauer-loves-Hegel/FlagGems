@@ -257,7 +257,7 @@ rm -f result-*.log *.log.json
 # 只提交代码文件（.py），不要用 git add -A
 git add $(git diff --name-only HEAD | grep '\.py$')
 git add $(git ls-files --others --exclude-standard | grep '\.py$')
-git -c user.name="taooo" -c user.email="gumptao2997@gmail.com" commit -m "Fix {{ISSUE_ID}}: {{OPERATOR}} {{ERROR_TYPE}}"
+git -c user.name="{{GIT_AUTHOR_NAME}}" -c user.email="{{GIT_AUTHOR_EMAIL}}" commit -m "Fix {{ISSUE_ID}}: {{OPERATOR}} {{ERROR_TYPE}}"
 ```
 
 **禁止提交的文件类型**：`.log`、`.json`（非源码）、`__pycache__/`、`.pyc`、benchmark 输出文件。如果不确定，用 `git status` 检查暂存区，确保只有 `.py` 源码文件。
