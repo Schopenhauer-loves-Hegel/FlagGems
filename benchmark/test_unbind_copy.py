@@ -50,12 +50,22 @@ def _input_fn(shape, dtype, device):
     yield inp, dim
 
 
+def _case_fn(shape, dtype):
+    del dtype
+    yield base.BenchmarkCasePlan(
+        shape={"input": shape, "outputs": [shape[1:]] * shape[0]},
+        params={"dim": 0},
+        builder_args=(shape, 0),
+    )
+
+
 @pytest.mark.unbind_copy
 def test_unbind_copy():
     bench = UnbindCopyBenchmark(
         op_name="unbind_copy",
         torch_op=torch.unbind_copy,
-        input_fn=_input_fn,
+        case_fn=_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
         dtypes=consts.FLOAT_DTYPES,
     )
     bench.run()

@@ -54,6 +54,20 @@ class SiluBackwardBenchmark(base.UnaryPointwiseBenchmark):
             grad_out = torch.randn_like(inp)
             yield grad_out, inp
 
+    def get_case_iter(self, dtype: torch.dtype) -> Generator:
+        for ordinal, shape in enumerate(self.shapes):
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"grad_output": shape, "input": shape},
+                    builder_args=(shape, 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        return self._materialize_from_legacy_shape_case(case)
+
 
 @pytest.mark.silu_backward
 @pytest.mark.skipif(

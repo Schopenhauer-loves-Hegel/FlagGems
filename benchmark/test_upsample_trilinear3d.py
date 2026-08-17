@@ -48,8 +48,31 @@ def test_upsample_trilinear3d(align_corners):
 
         yield input, output_size, align_corners, None, None, None
 
+    def upsample_trilinear3d_case_fn(shape, dtype):
+        del dtype
+        batch, channel, height, width = shape
+        depth = 4
+        width = width // 4
+        new_height = height // depth
+        real_shape = (batch, channel, depth, new_height, width)
+        output_size = (depth * 2, new_height * 2, width * 2)
+        yield base.BenchmarkCasePlan(
+            shape={"input": real_shape, "output": real_shape[:2] + output_size},
+            params={
+                "output_size": output_size,
+                "align_corners": align_corners,
+                "scales_d": None,
+                "scales_h": None,
+                "scales_w": None,
+            },
+            builder_args=(shape, 0),
+        )
+
     bench = UpsampleBenchmark(
-        input_fn=upsample_trilinear3d_input_fn,
+        case_fn=upsample_trilinear3d_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(
+            upsample_trilinear3d_input_fn
+        ),
         op_name="upsample_trilinear3d",
         torch_op=torch.ops.aten.upsample_trilinear3d.default,
         dtypes=consts.FLOAT_DTYPES,

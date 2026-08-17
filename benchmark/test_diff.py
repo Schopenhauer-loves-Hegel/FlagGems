@@ -27,6 +27,18 @@ def _input_fn(shape, dtype, device):
     yield (inp,)
 
 
+def _case_fn(n):
+    def plan(shape, dtype):
+        del dtype
+        yield base.BenchmarkCasePlan(
+            shape={"input": shape},
+            params={"n": n},
+            builder_args=(shape, 0),
+        )
+
+    return plan
+
+
 class DiffBenchmark(base.GenericBenchmark2DOnly):
     def set_shapes(self, *args, **kwargs):
         super().set_shapes(*args, **kwargs)
@@ -48,7 +60,8 @@ def test_diff():
     bench = DiffBenchmark(
         op_name="diff",
         torch_op=torch.diff,
-        input_fn=_input_fn,
+        case_fn=_case_fn(1),
+        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
         dtypes=consts.FLOAT_DTYPES,
     )
     bench.run()
@@ -62,7 +75,8 @@ def test_diff_n2():
     bench = DiffBenchmark(
         op_name="diff",
         torch_op=functools.partial(torch.diff, n=2),
-        input_fn=_input_fn,
+        case_fn=_case_fn(2),
+        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
         dtypes=consts.FLOAT_DTYPES,
     )
     bench.run()

@@ -40,6 +40,21 @@ class Rot90Benchmark(base.Benchmark):
             inp = torch.randn(shape, dtype=cur_dtype, device=self.device)
             yield inp, 1, [0, 1]  # k=1, dims=[0, 1]
 
+    def get_case_iter(self, dtype):
+        for ordinal, shape in enumerate(self.shapes):
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"input": shape},
+                    params={"k": 1, "dims": [0, 1]},
+                    builder_args=(shape, 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        return self._materialize_from_legacy_shape_case(case)
+
 
 @pytest.mark.rot90
 def test_rot90():

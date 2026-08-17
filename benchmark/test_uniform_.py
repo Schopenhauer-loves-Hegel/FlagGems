@@ -21,7 +21,8 @@ from . import base, consts
 @pytest.mark.uniform_
 def test_uniform_():
     bench = base.GenericBenchmark(
-        input_fn=base.unary_input_fn,
+        case_fn=base.unary_case_fn,
+        materialize_fn=base.materialize_unary_case,
         op_name="uniform_",
         torch_op=torch.Tensor.uniform_,
         dtypes=consts.FLOAT_DTYPES,

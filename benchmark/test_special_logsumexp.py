@@ -30,9 +30,30 @@ class LogsumexpBenchmark(base.Benchmark):
         self.shapes = LOGSUMEXP_SHAPES
 
     def get_input_iter(self, cur_dtype):
-        for shape in self.shapes:
-            inp = torch.randn(shape, dtype=cur_dtype, device=self.device)
-            yield inp, 1
+        for case in self.get_case_iter(cur_dtype):
+            yield self.materialize_case(case)
+
+    def supports_cases(self) -> bool:
+        return type(self).get_input_iter is LogsumexpBenchmark.get_input_iter
+
+    def get_case_iter(self, dtype):
+        for ordinal, shape in enumerate(self.shapes):
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"input": shape},
+                    params={"dim": 1},
+                    builder_args=(shape,),
+                ),
+            )
+
+    def materialize_case(self, case):
+        plan = case.builder_args[0]
+        inp = torch.randn(
+            plan.builder_args[0], dtype=case.dtype, device=self.device
+        )
+        return inp, plan.params["dim"]
 
 
 @pytest.mark.special_logsumexp

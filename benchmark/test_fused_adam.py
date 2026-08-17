@@ -50,6 +50,30 @@ def fused_adam_input_fn(shape, dtype, device):
     yield param, grad, exp_avg, exp_avg_sq, max_exp_avg_sq, state_step
 
 
+def fused_adam_case_fn(shape, dtype):
+    del dtype
+    yield base.BenchmarkCasePlan(
+        shape={
+            "param": shape,
+            "grad": shape,
+            "exp_avg": shape,
+            "exp_avg_sq": shape,
+            "max_exp_avg_sq": shape,
+            "state_step": (1,),
+        },
+        params={
+            "lr": 0.001,
+            "beta1": 0.9,
+            "beta2": 0.999,
+            "weight_decay": 0.0,
+            "eps": 1e-8,
+            "amsgrad": False,
+            "maximize": False,
+        },
+        builder_args=(shape, 0),
+    )
+
+
 def torch_op(param, grad, exp_avg, exp_avg_sq, max_exp_avg_sq, state_step):
     # Reference: compute manually using Adam formula
     lr = 0.001
@@ -93,7 +117,8 @@ def test_fused_adam():
         )
 
     bench = FusedAdamBenchmark(
-        input_fn=fused_adam_input_fn,
+        case_fn=fused_adam_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(fused_adam_input_fn),
         op_name="fused_adam",
         torch_op=torch_op,
         # _fused_adam only supports float32 for optimizer state precision
@@ -124,7 +149,8 @@ def test_fused_adam_():
         return param
 
     bench = FusedAdamBenchmark(
-        input_fn=fused_adam_input_fn,
+        case_fn=fused_adam_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(fused_adam_input_fn),
         op_name="fused_adam_",
         torch_op=torch_op,
         # _fused_adam only supports float32 for optimizer state precision

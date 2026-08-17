@@ -28,6 +28,20 @@ class MedianNoDimBenchmark(base.Benchmark):
         for shape in self.shapes:
             yield (utils.generate_tensor_input(shape, cur_dtype, self.device),)
 
+    def get_case_iter(self, dtype) -> Generator:
+        for ordinal, shape in enumerate(self.shapes):
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"input": shape},
+                    builder_args=(shape, 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        return self._materialize_from_legacy_shape_case(case)
+
 
 class MedianReductionBenchmark(base.Benchmark):
     DEFAULT_SHAPE_FILES = "benchmark/core_shapes.yaml"
@@ -51,6 +65,43 @@ class MedianReductionBenchmark(base.Benchmark):
             inp = utils.generate_tensor_input(shape, cur_dtype, self.device)
             yield inp, dim, {"keepdim": keepdim}
 
+    @staticmethod
+    def _normalize_shape(case_id, shape_spec):
+        if shape_spec and isinstance(shape_spec[0], (list, tuple)):
+            shape = tuple(shape_spec[0])
+            dim = int(shape_spec[1])
+            keepdim = bool(shape_spec[2]) if len(shape_spec) > 2 else False
+        else:
+            shape = shape_spec
+            keepdim = case_id % 3 == 0
+            if len(shape) == 1:
+                dim = 0
+            elif case_id % 2 == 0:
+                dim = len(shape) - 1
+            else:
+                dim = 0
+        return shape, dim, keepdim
+
+    def get_case_iter(self, dtype) -> Generator:
+        for ordinal, shape_spec in enumerate(self.shapes):
+            shape, dim, keepdim = self._normalize_shape(ordinal, shape_spec)
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"input": shape},
+                    params={"dim": dim, "keepdim": keepdim},
+                    builder_args=(shape_spec, 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        plan = case.builder_args[0]
+        inp = utils.generate_tensor_input(
+            plan.shape["input"], case.dtype, self.device
+        )
+        return inp, plan.params["dim"], {"keepdim": plan.params["keepdim"]}
+
 
 @pytest.mark.median
 def test_median():
@@ -62,7 +113,7 @@ def test_median():
     bench.run()
 
 
-@pytest.mark.median
+@pytest.mark.median_dim
 def test_median_dim():
     bench = MedianReductionBenchmark(
         op_name="median_dim",

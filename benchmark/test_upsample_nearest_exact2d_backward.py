@@ -43,6 +43,23 @@ class UpsampleNearestExact2dBackwardBenchmark(base.Benchmark):
             input_size = tuple(x.shape)
             yield grad_output, output_size, input_size
 
+    def get_case_iter(self, dtype):
+        for ordinal, shape in enumerate(self.shapes):
+            output_size = (shape[2] * 2, shape[3] * 2)
+            grad_shape = shape[:2] + output_size
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"grad_output": grad_shape, "input": shape},
+                    params={"output_size": output_size, "input_size": shape},
+                    builder_args=(shape, 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        return self._materialize_from_legacy_shape_case(case)
+
 
 @pytest.mark.upsample_nearest_exact2d_backward
 def test_upsample_nearest_exact2d_backward():

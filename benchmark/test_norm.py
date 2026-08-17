@@ -10,6 +10,15 @@ def norm_input_fn(shape, dtype, device):
     yield inp, p
 
 
+def norm_case_fn(shape, dtype):
+    del dtype
+    yield base.BenchmarkCasePlan(
+        shape={"input": shape},
+        params={"p": 2},
+        builder_args=(shape, 0),
+    )
+
+
 def norm_scalaropt_dim_input_fn(shape, dtype, device):
     inp = torch.randn(shape, dtype=dtype, device=device)
     p = 2
@@ -21,7 +30,8 @@ def norm_scalaropt_dim_input_fn(shape, dtype, device):
 @pytest.mark.norm
 def test_norm():
     bench = base.GenericBenchmarkExcluse1D(
-        input_fn=norm_input_fn,
+        case_fn=norm_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(norm_input_fn),
         op_name="norm",
         torch_op=torch.norm,
         dtypes=consts.FLOAT_DTYPES,

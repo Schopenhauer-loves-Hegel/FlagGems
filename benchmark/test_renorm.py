@@ -44,6 +44,22 @@ class RenormBenchmark(base.Benchmark):
             maxnorm = 1.0
             yield x, p, dim, maxnorm
 
+    def get_case_iter(self, dtype):
+        for ordinal, shape in enumerate(self.shapes):
+            dim = 1 if len(shape) > 1 else 0
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"input": shape},
+                    params={"p": 2.0, "dim": dim, "maxnorm": 1.0},
+                    builder_args=(shape, 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        return self._materialize_from_legacy_shape_case(case)
+
 
 @pytest.mark.renorm
 @pytest.mark.skipif(

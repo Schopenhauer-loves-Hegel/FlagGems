@@ -83,6 +83,29 @@ class LSTMCellBackwardBenchmark(base.Benchmark):
 
             yield grad_hy, grad_cy, cx, cy, workspace, True
 
+    def get_case_iter(self, dtype):
+        for ordinal, shape in enumerate(self.shapes):
+            batch_size, hidden_size = shape
+            state_shape = (batch_size, hidden_size)
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={
+                        "grad_hy": state_shape,
+                        "grad_cy": state_shape,
+                        "cx": state_shape,
+                        "cy": state_shape,
+                        "workspace": "forward_generated",
+                    },
+                    params={"has_bias": True},
+                    builder_args=(shape, 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        return self._materialize_from_legacy_shape_case(case)
+
 
 @pytest.mark.thnn_fused_lstm_cell_backward_impl
 def test_thnn_fused_lstm_cell_backward_impl():

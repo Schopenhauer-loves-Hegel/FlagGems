@@ -39,6 +39,28 @@ class CdistBackwardBenchmark(base.Benchmark):
             grad = torch.randn(batch, n1, n2, dtype=cur_dtype, device=self.device)
             yield grad, x1, x2, 2.0, cdist
 
+    def get_case_iter(self, dtype):
+        for ordinal, shape in enumerate(self.shapes):
+            batch, n1, dim = shape
+            n2 = n1 // 2 + 1
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={
+                        "grad": (batch, n1, n2),
+                        "x1": shape,
+                        "x2": (batch, n2, dim),
+                        "cdist": (batch, n1, n2),
+                    },
+                    params={"p": 2.0},
+                    builder_args=(shape, 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        return self._materialize_from_legacy_shape_case(case)
+
 
 @pytest.mark.cdist_backward
 def test_cdist_backward():

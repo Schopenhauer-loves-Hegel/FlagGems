@@ -31,8 +31,10 @@ def test_linalg_eigvals(shape, dtype):
     ref_inp = utils.to_reference(inp)
 
     ref_out = torch.ops.aten._linalg_eigvals.default(ref_inp)
-    with flag_gems.use_gems():
-        res_out = torch.ops.aten._linalg_eigvals.default(inp)
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "linalg_eigvals", flag_gems._linalg_eigvals
+    )
+    res_out = gems_op(inp)
 
     # Compare complex eigenvalues - use the output dtype for comparison
     # For float32 input, output is complex64

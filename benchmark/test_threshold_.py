@@ -23,11 +23,21 @@ def _input_fn(shape, cur_dtype, device):
     yield inp,
 
 
+def _case_fn(shape, dtype):
+    del dtype
+    yield base.BenchmarkCasePlan(
+        shape={"input": shape},
+        params={"threshold": 0.0, "value": -1.0},
+        builder_args=(shape, 0),
+    )
+
+
 @pytest.mark.threshold_
 def test_threshold_():
     bench = base.GenericBenchmark(
         op_name="threshold_",
-        input_fn=_input_fn,
+        case_fn=_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
         torch_op=lambda x: torch.threshold_(x, 0.0, -1.0),
         dtypes=consts.FLOAT_DTYPES,
         is_inplace=True,

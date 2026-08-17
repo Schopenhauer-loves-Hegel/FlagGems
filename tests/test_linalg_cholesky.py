@@ -39,9 +39,10 @@ def test_linalg_cholesky(shape, dtype):
     ref_A = utils.to_reference(A)
     ref_out = torch.linalg.cholesky(ref_A)
 
-    # For gems, use aten.linalg_cholesky with flag_gems
-    with flag_gems.use_gems():
-        res_out = torch.ops.aten.linalg_cholesky(A)
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "linalg_cholesky", flag_gems.linalg_cholesky
+    )
+    res_out = gems_op(A)
 
     utils.gems_assert_close(res_out, ref_out, dtype)
 
@@ -65,9 +66,10 @@ def test_linalg_cholesky_upper(shape, dtype):
     ref_A = utils.to_reference(A)
     ref_out = torch.linalg.cholesky(ref_A, upper=True)
 
-    # For gems, use aten.linalg_cholesky with flag_gems
-    with flag_gems.use_gems():
-        res_out = torch.ops.aten.linalg_cholesky(A, upper=True)
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "linalg_cholesky", flag_gems.linalg_cholesky
+    )
+    res_out = gems_op(A, upper=True)
 
     utils.gems_assert_close(res_out, ref_out, dtype)
 
@@ -91,8 +93,9 @@ def test_linalg_cholesky_batch(shape, dtype):
     ref_A = utils.to_reference(A)
     ref_out = torch.linalg.cholesky(ref_A)
 
-    # For gems, use aten.linalg_cholesky with flag_gems
-    with flag_gems.use_gems():
-        res_out = torch.ops.aten.linalg_cholesky(A)
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "linalg_cholesky", flag_gems.linalg_cholesky
+    )
+    res_out = gems_op(A)
 
     utils.gems_assert_close(res_out, ref_out, dtype)

@@ -23,11 +23,21 @@ def _input_fn(shape, cur_dtype, device):
     yield inp1, 3.14
 
 
+def _case_fn(shape, dtype):
+    del dtype
+    yield base.BenchmarkCasePlan(
+        shape={"input": shape},
+        params={"max": 3.14},
+        builder_args=(shape, 0),
+    )
+
+
 @pytest.mark.clamp_max
 def test_clamp_max():
     bench = base.GenericBenchmark(
         op_name="clamp_max",
-        input_fn=_input_fn,
+        case_fn=_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
         torch_op=torch.clamp_max,
         dtypes=consts.FLOAT_DTYPES,
     )
@@ -37,7 +47,8 @@ def test_clamp_max():
 @pytest.mark.clamp_max_
 def test_clamp_max_inplace():
     bench = base.GenericBenchmark(
-        input_fn=_input_fn,
+        case_fn=_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
         op_name="clamp_max_",
         torch_op=torch.clamp_max_,
         dtypes=consts.FLOAT_DTYPES,

@@ -74,3 +74,50 @@ These steps apply to Python-based operators as well as C++-wrapped operators.
      and a custom input generator. You can refer to various `Benchmark` subclasses across the `benchmark` directory
      for examples.
 {{% /steps %}}
+
+## Enumerating and replaying benchmark cases
+
+Benchmark families that expose their loop coordinates can list internal cases
+without allocating tensors:
+
+```shell
+python -m pytest benchmark/test_addmm_.py --level core \
+  --list-cases --output addmm-cases.json
+```
+
+The JSON report uses `flaggems.benchmark-case-list/v2`. It records one globally
+unique `case_id` for every timing case, its dtype, the original shape coordinates,
+and non-shape loop parameters. The opaque ID includes the pytest node identity and
+the local loop coordinates. For `BlasBenchmark`, the metadata contains `b/m/n/k`
+and `b_column_major`. Duplicate shapes remain separate cases because identity also
+includes the original ordinal.
+
+Run one or more cases by repeating the exact selector:
+
+```shell
+python -m pytest benchmark/test_addmm_.py --level core \
+  --case-id 'benchmark/test_addmm_.py::test_addmm_::core::float16::0' \
+  --record json --output addmm-result.json
+```
+
+Each migrated benchmark has two input stages: `get_case_iter()` plans ordered,
+tensor-free cases, and `materialize_case()` constructs inputs only after a case
+is selected. The selected and full benchmark paths consume the same planned
+case sequence, and each emitted metric includes its `case_id`. Common BLAS,
+generic, reduction, unary, and binary families provide this contract once for
+their operators. A custom benchmark that replaces the family loop must provide
+the same two stages; unsupported legacy benchmarks fail instead of reconstructing
+cases approximately. The public operator ABI and default call arguments are not
+duplicated in the case list.
+
+External benchmark adapters can temporarily install a candidate implementation
+before entering `use_gems()`:
+
+```python
+with flag_gems.testing.override_registered_op("addmm_", candidate):
+    with flag_gems.use_gems(include=["addmm_"]):
+        ...
+```
+
+The operator name must match exactly one public registry entry. The context
+manager restores both registration tables, including when execution raises.

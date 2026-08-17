@@ -37,6 +37,20 @@ class EuclideanDistBenchmark(base.Benchmark):
             x2 = torch.randn(n2, d2, dtype=cur_dtype, device=self.device)
             yield x1, x2
 
+    def get_case_iter(self, dtype):
+        for ordinal, shape_pair in enumerate(self.shapes):
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"x1": shape_pair[0], "x2": shape_pair[1]},
+                    builder_args=(shape_pair, 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        return self._materialize_from_legacy_shape_case(case)
+
 
 @pytest.mark.euclidean_dist
 def test_euclidean_dist():

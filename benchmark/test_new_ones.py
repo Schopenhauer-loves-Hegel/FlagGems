@@ -18,9 +18,19 @@ import torch
 from . import base, consts
 
 
-def new_ones_input_fn(shape, dtype, device):
+def new_ones_case_fn(shape, dtype):
+    del dtype
+    yield base.BenchmarkCasePlan(
+        shape={"tensor": shape},
+        params={"size": shape},
+        builder_args=(shape,),
+    )
+
+
+def materialize_new_ones_case(plan, dtype, device):
+    shape = plan.builder_args[0]
     inp = torch.randn(shape, dtype=dtype, device=device)
-    yield {"tensor": inp, "size": shape},
+    return {"tensor": inp, "size": plan.params["size"]},
 
 
 @pytest.mark.new_ones
@@ -28,7 +38,8 @@ def test_new_ones():
     bench = base.GenericBenchmark(
         op_name="new_ones",
         torch_op=lambda tensor, size: tensor.new_ones(size),
-        input_fn=new_ones_input_fn,
+        case_fn=new_ones_case_fn,
+        materialize_fn=materialize_new_ones_case,
         dtypes=consts.FLOAT_DTYPES,
     )
     bench.run()

@@ -18,10 +18,19 @@ import torch
 from . import base
 
 
-def kthvalue_input_fn(shape, dtype, device):
-    x = torch.randn(shape, device=device, dtype=dtype)
+def kthvalue_case_fn(shape, dtype):
+    del dtype
     k = 2 if shape[-1] > 2 else shape[-1]
-    yield {"input": x, "k": k, "dim": -1},
+    yield base.BenchmarkCasePlan(
+        shape={"input": shape},
+        params={"k": k, "dim": -1},
+        builder_args=(shape,),
+    )
+
+
+def materialize_kthvalue_case(plan, dtype, device):
+    x = torch.randn(plan.builder_args[0], device=device, dtype=dtype)
+    return {"input": x, **plan.params},
 
 
 class KthvalueBenchmark(base.GenericBenchmarkExcluse1D):
@@ -44,6 +53,7 @@ def test_kthvalue():
         # Benchmark uses float32 only because topk gemm kernel operates in float32;
         # the kthvalue op auto-converts non-fp32 inputs internally.
         dtypes=[torch.float32],
-        input_fn=kthvalue_input_fn,
+        case_fn=kthvalue_case_fn,
+        materialize_fn=materialize_kthvalue_case,
     )
     bench.run()

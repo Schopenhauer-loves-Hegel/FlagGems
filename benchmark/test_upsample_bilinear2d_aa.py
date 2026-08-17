@@ -47,6 +47,20 @@ def test_upsample_bilinear2d_aa():
             "scales_w": None,
         },
 
+    def upsample_bilinear2d_aa_case_fn(shape, dtype):
+        del dtype
+        output_size = (shape[2] * 2, shape[3] * 2)
+        yield base.BenchmarkCasePlan(
+            shape={"input": shape, "output": shape[:2] + output_size},
+            params={
+                "output_size": output_size,
+                "align_corners": False,
+                "scales_h": None,
+                "scales_w": None,
+            },
+            builder_args=(shape, 0),
+        )
+
     if vendor_name == "cambricon":
         # 寒武纪仅支持 float32
         dtypes = [torch.float32]
@@ -56,7 +70,10 @@ def test_upsample_bilinear2d_aa():
     else:
         dtypes = consts.FLOAT_DTYPES
     bench = UpsampleBenchmark(
-        input_fn=upsample_bilinear2d_aa_input_fn,
+        case_fn=upsample_bilinear2d_aa_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(
+            upsample_bilinear2d_aa_input_fn
+        ),
         op_name="upsample_bilinear2d_aa",
         torch_op=torch._C._nn._upsample_bilinear2d_aa,
         dtypes=dtypes,

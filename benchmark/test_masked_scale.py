@@ -45,6 +45,21 @@ class MaskedScaleBenchmark(base.Benchmark):
         shape = list(args[0].shape)
         return torch.tensor(shape).prod().item()
 
+    def get_case_iter(self, dtype) -> Generator:
+        for ordinal, shape in enumerate(self.shapes):
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"input": shape, "mask": shape},
+                    params={"scale": 2.0, "mask_dtype": "torch.uint8"},
+                    builder_args=(shape, 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        return self._materialize_from_legacy_shape_case(case)
+
 
 # _masked_scale only supports float32 on most backends.
 # CUDA reference does not support float16/bf16 for this private op.

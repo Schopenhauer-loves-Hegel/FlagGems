@@ -44,6 +44,27 @@ class LinearBackwardBenchmark(base.Benchmark):
             )
             yield input, grad_output, weight, (True, True, True)
 
+    def get_case_iter(self, dtype):
+        for ordinal, (batch, in_features) in enumerate(self.shapes):
+            out_features = in_features * 2
+            shape = (batch, in_features)
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={
+                        "input": shape,
+                        "grad_output": (batch, out_features),
+                        "weight": (out_features, in_features),
+                    },
+                    params={"output_mask": (True, True, True)},
+                    builder_args=((batch, in_features), 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        return self._materialize_from_legacy_shape_case(case)
+
 
 @pytest.mark.linear_backward
 def test_linear_backward():

@@ -49,6 +49,27 @@ class MaxUnpool2dBenchmark(base.Benchmark):
         pooled, indices, output_size = args
         return pooled.numel()
 
+    def get_case_iter(self, dtype):
+        for ordinal, shape in enumerate(self.shapes):
+            n, c, h, w = shape
+            pooled_shape = (n, c, h // 2, w // 2)
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={
+                        "pooled": pooled_shape,
+                        "indices": pooled_shape,
+                        "output": shape,
+                    },
+                    params={"kernel_size": 2, "stride": 2, "output_size": [h, w]},
+                    builder_args=(shape, 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        return self._materialize_from_legacy_shape_case(case)
+
 
 @pytest.mark.max_unpool2d
 def test_max_unpool2d():

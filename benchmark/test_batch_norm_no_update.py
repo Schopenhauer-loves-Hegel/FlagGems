@@ -44,6 +44,22 @@ def batch_norm_no_update_input_fn(shape, dtype, device):
     yield inp, weight, bias, running_mean, running_var, momentum, eps
 
 
+def batch_norm_no_update_case_fn(shape, dtype):
+    del dtype
+    channels = shape[1]
+    yield base.BenchmarkCasePlan(
+        shape={
+            "input": shape,
+            "weight": (channels,),
+            "bias": (channels,),
+            "running_mean": (channels,),
+            "running_var": (channels,),
+        },
+        params={"momentum": 0.1, "eps": 1e-5},
+        builder_args=(shape, 0),
+    )
+
+
 def torch_batch_norm_no_update(
     inp, weight, bias, running_mean, running_var, momentum, eps
 ):
@@ -55,7 +71,10 @@ def torch_batch_norm_no_update(
 @pytest.mark.batch_norm_no_update
 def test_batch_norm_no_update():
     bench = NormBenchmark(
-        input_fn=batch_norm_no_update_input_fn,
+        case_fn=batch_norm_no_update_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(
+            batch_norm_no_update_input_fn
+        ),
         op_name="batch_norm_no_update",
         torch_op=torch_batch_norm_no_update,
         dtypes=consts.FLOAT_DTYPES,

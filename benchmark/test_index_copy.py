@@ -43,13 +43,31 @@ def _tensor_input_fn(shape, dtype, device):
     yield inp, dim, index, src
 
 
+def _case_fn(shape, dtype):
+    del dtype
+    dim = 0 if len(shape) == 1 else 1
+    index_len = max(shape[dim] // 2, 1)
+    src_shape = list(shape)
+    src_shape[dim] = index_len
+    yield base.BenchmarkCasePlan(
+        shape={
+            "input": shape,
+            "index": (index_len,),
+            "source": tuple(src_shape),
+        },
+        params={"dim": dim},
+        builder_args=(shape, 0),
+    )
+
+
 @pytest.mark.index_copy
 @pytest.mark.skipif(
     flag_gems.vendor_name == "tsingmicro", reason="Issue #4131: not working"
 )
 def test_index_copy():
     bench = IndexCopyBenchmark(
-        input_fn=_tensor_input_fn,
+        case_fn=_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(_tensor_input_fn),
         op_name="index_copy",
         torch_op=torch.index_copy,
         dtypes=consts.FLOAT_DTYPES,
@@ -63,7 +81,8 @@ def test_index_copy():
 )
 def test_index_copy_():
     bench = IndexCopyBenchmark(
-        input_fn=_tensor_input_fn,
+        case_fn=_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(_tensor_input_fn),
         op_name="index_copy_",
         torch_op=torch.Tensor.index_copy_,
         dtypes=consts.FLOAT_DTYPES,

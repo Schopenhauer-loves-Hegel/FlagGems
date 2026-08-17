@@ -32,6 +32,18 @@ def _input_fn_factory(reduce):
     return inner
 
 
+def _case_fn_factory(reduce):
+    def inner(shape, dtype):
+        del dtype
+        yield base.BenchmarkCasePlan(
+            shape={"self": shape, "index": shape, "src": shape},
+            params={"dim": -1, "reduce": reduce},
+            builder_args=(shape, 0),
+        )
+
+    return inner
+
+
 @pytest.mark.scatter_reduce_two_
 @pytest.mark.skipif(
     flag_gems.vendor_name == "tsingmicro", reason="Issue #4131: not working"
@@ -40,7 +52,10 @@ def test_scatter_reduce_two_inplace_sum():
     bench = base.GenericBenchmark2DOnly(
         op_name="scatter_reduce_",
         torch_op=torch.Tensor.scatter_reduce_,
-        input_fn=_input_fn_factory("sum"),
+        case_fn=_case_fn_factory("sum"),
+        materialize_fn=base.materialize_from_generic_input_fn(
+            _input_fn_factory("sum")
+        ),
         dtypes=consts.FLOAT_DTYPES,
         inplace=True,
     )
@@ -55,7 +70,10 @@ def test_scatter_reduce_two_inplace_amax():
     bench = base.GenericBenchmark2DOnly(
         op_name="scatter_reduce_",
         torch_op=torch.Tensor.scatter_reduce_,
-        input_fn=_input_fn_factory("amax"),
+        case_fn=_case_fn_factory("amax"),
+        materialize_fn=base.materialize_from_generic_input_fn(
+            _input_fn_factory("amax")
+        ),
         dtypes=consts.FLOAT_DTYPES,
         inplace=True,
     )
@@ -70,7 +88,10 @@ def test_scatter_reduce_two_inplace_amin():
     bench = base.GenericBenchmark2DOnly(
         op_name="scatter_reduce_",
         torch_op=torch.Tensor.scatter_reduce_,
-        input_fn=_input_fn_factory("amin"),
+        case_fn=_case_fn_factory("amin"),
+        materialize_fn=base.materialize_from_generic_input_fn(
+            _input_fn_factory("amin")
+        ),
         dtypes=consts.FLOAT_DTYPES,
         inplace=True,
     )
@@ -85,7 +106,10 @@ def test_scatter_reduce_two_inplace_mean():
     bench = base.GenericBenchmark2DOnly(
         op_name="scatter_reduce_",
         torch_op=torch.Tensor.scatter_reduce_,
-        input_fn=_input_fn_factory("mean"),
+        case_fn=_case_fn_factory("mean"),
+        materialize_fn=base.materialize_from_generic_input_fn(
+            _input_fn_factory("mean")
+        ),
         dtypes=consts.FLOAT_DTYPES,
         inplace=True,
     )

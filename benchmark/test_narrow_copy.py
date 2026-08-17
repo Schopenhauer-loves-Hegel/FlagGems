@@ -47,6 +47,20 @@ def narrow_copy_input_fn(shape, cur_dtype, device):
     yield inp, dim, start, length
 
 
+def narrow_copy_case_fn(shape, dtype):
+    del dtype
+    dim = 0
+    start = shape[dim] // 4
+    length = shape[dim] // 2
+    output_shape = list(shape)
+    output_shape[dim] = length
+    yield base.BenchmarkCasePlan(
+        shape={"input": shape, "output": tuple(output_shape)},
+        params={"dim": dim, "start": start, "length": length},
+        builder_args=(shape, 0),
+    )
+
+
 def narrow_copy_gbps(bench_fn_args, latency):
     inp, dim, start, length = bench_fn_args
     # Input is full tensor, output is a slice
@@ -60,7 +74,8 @@ def test_narrow_copy_perf():
     bench = TensorSelectBenchmark(
         op_name="narrow_copy",
         torch_op=torch.narrow_copy,
-        input_fn=narrow_copy_input_fn,
+        case_fn=narrow_copy_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(narrow_copy_input_fn),
         dtypes=consts.FLOAT_DTYPES,
         get_gbps=narrow_copy_gbps,
     )

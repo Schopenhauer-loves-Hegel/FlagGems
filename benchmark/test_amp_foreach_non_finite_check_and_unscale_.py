@@ -55,6 +55,26 @@ class AmpForeachNonFiniteCheckAndUnscaleBenchmark(base.Benchmark):
             found_inf = torch.tensor(0.0, device=self.device, dtype=torch.float32)
             yield tensors, found_inf, inv_scale
 
+    def get_case_iter(self, dtype) -> Generator:
+        for ordinal, shape in enumerate(self.shapes):
+            second_shape = (max(1, shape[0] // 2),) + shape[1:]
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={
+                        "tensors": [shape, second_shape],
+                        "found_inf": (),
+                        "inv_scale": (),
+                    },
+                    params={"scalar_dtype": "torch.float32"},
+                    builder_args=(shape, 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        return self._materialize_from_legacy_shape_case(case)
+
 
 @pytest.mark.amp_foreach_non_finite_check_and_unscale_
 def test_amp_foreach_non_finite_check_and_unscale_():

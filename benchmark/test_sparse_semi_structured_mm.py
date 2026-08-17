@@ -43,6 +43,27 @@ class SparseSemiStructuredMMBenchmark(base.Benchmark):
             mat2 = torch.randn(4 * K4, N, dtype=cur_dtype, device=self.device)
             yield mat1, mat1_meta, mat2
 
+    def get_case_iter(self, dtype):
+        k4 = 32
+        for ordinal, shape in enumerate(self.shapes):
+            m, n = shape
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={
+                        "mat1": (m, 4 * k4),
+                        "mat1_meta": (m, k4),
+                        "mat2": (4 * k4, n),
+                    },
+                    params={"metadata_dtype": "torch.bool"},
+                    builder_args=(shape, 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        return self._materialize_from_legacy_shape_case(case)
+
 
 @pytest.mark.sparse_semi_structured_mm
 def test_sparse_semi_structured_mm():

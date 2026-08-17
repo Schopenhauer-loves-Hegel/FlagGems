@@ -28,6 +28,20 @@ class LinalgEigvalsBenchmark(base.Benchmark):
             x = torch.randn(shape, dtype=cur_dtype, device=self.device)
             yield x,
 
+    def get_case_iter(self, dtype):
+        for ordinal, shape in enumerate(self.shapes):
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"input": shape},
+                    builder_args=(shape, 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        return self._materialize_from_legacy_shape_case(case)
+
 
 @pytest.mark.linalg_eigvals
 def test_linalg_eigvals():

@@ -278,11 +278,50 @@ def _flash_attention_forward_input_fn(config, dtype, device):
         )
 
 
+def flash_attention_forward_case_fn(config, dtype):
+    del dtype
+    (
+        batch,
+        num_head,
+        num_head_k,
+        q_seq_len,
+        kv_seq_len,
+        head_size,
+        is_causal,
+        dropout_p,
+        return_debug_mask,
+        window_size_left,
+        window_size_right,
+        use_alibi,
+    ) = config
+    yield base.BenchmarkCasePlan(
+        shape={
+            "q": (batch, q_seq_len, num_head, head_size),
+            "k": (batch, kv_seq_len, num_head_k, head_size),
+            "v": (batch, kv_seq_len, num_head_k, head_size),
+            "alibi_slopes": (batch, num_head) if use_alibi else None,
+        },
+        params={
+            "scale": float(1.0 / math.sqrt(head_size)),
+            "is_causal": is_causal,
+            "dropout_p": dropout_p,
+            "return_debug_mask": return_debug_mask,
+            "window_size_left": window_size_left,
+            "window_size_right": window_size_right,
+            "use_alibi": use_alibi,
+        },
+        builder_args=(config, 0),
+    )
+
+
 @pytest.mark.underscore_flash_attention_forward
 def test__flash_attention_forward():
     bench = FlashAttentionForwardBenchmark(
         op_name="_flash_attention_forward",
-        input_fn=_flash_attention_forward_input_fn,
+        case_fn=flash_attention_forward_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(
+            _flash_attention_forward_input_fn
+        ),
         torch_op=torch.ops.aten._flash_attention_forward.default,
         # FlashAttention supports CUDA float16 and bfloat16 inputs.
         dtypes=[torch.float16, torch.bfloat16],
@@ -297,7 +336,10 @@ def test__flash_attention_forward():
 def test_flash_attention_forward():
     bench = FlashAttentionForwardBenchmark(
         op_name="flash_attention_forward",
-        input_fn=flash_attention_forward_input_fn,
+        case_fn=flash_attention_forward_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(
+            flash_attention_forward_input_fn
+        ),
         torch_op=torch_flash_attention_forward,
         dtypes=[torch.float16, torch.bfloat16],
     )

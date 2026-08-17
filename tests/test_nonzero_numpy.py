@@ -44,8 +44,10 @@ def test_nonzero_numpy(shape, dtype):
     ref_inp = to_reference(inp, False)
 
     ref_out = torch.ops.aten.nonzero_numpy(ref_inp)
-    with flag_gems.use_gems():
-        res_out = torch.ops.aten.nonzero_numpy(inp)
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "nonzero_numpy", flag_gems.nonzero_numpy
+    )
+    res_out = gems_op(inp)
 
     assert len(res_out) == len(ref_out), "Number of output tensors should match"
     for res_t, ref_t in zip(res_out, ref_out):

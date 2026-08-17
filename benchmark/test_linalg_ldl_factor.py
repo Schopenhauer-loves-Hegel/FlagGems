@@ -47,6 +47,21 @@ class LdlFactorBenchmark(base.Benchmark):
     def get_gems_input_iter(self, cur_dtype):
         return self.get_input_iter(cur_dtype)
 
+    def get_case_iter(self, dtype):
+        for ordinal, shape in enumerate(self.shapes):
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"input": shape},
+                    params={"matrix_intent": "symmetric_positive_definite"},
+                    builder_args=(shape, 0),
+                ),
+            )
+
+    def materialize_case(self, case):
+        return self._materialize_from_legacy_shape_case(case)
+
 
 @pytest.mark.linalg_ldl_factor
 def test_linalg_ldl_factor():

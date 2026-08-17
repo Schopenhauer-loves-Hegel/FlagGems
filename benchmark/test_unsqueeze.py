@@ -13,11 +13,22 @@ def _input_fn(shape, cur_dtype, device):
         yield inp, 1
 
 
+def _case_fn(shape, dtype):
+    del dtype
+    dim = 0 if len(shape) == 1 else 1
+    yield base.BenchmarkCasePlan(
+        shape={"input": shape},
+        params={"dim": dim},
+        builder_args=(shape, 0),
+    )
+
+
 @pytest.mark.unsqueeze
 def test_unsqueeze():
     bench = base.GenericBenchmark(
         op_name="unsqueeze",
-        input_fn=_input_fn,
+        case_fn=_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
         torch_op=torch.unsqueeze,
         dtypes=consts.FLOAT_DTYPES,
     )
@@ -28,7 +39,8 @@ def test_unsqueeze():
 def test_unsqueeze_():
     bench = base.GenericBenchmark(
         op_name="unsqueeze_",
-        input_fn=_input_fn,
+        case_fn=_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
         torch_op=torch.Tensor.unsqueeze_,
         dtypes=consts.FLOAT_DTYPES,
         is_inplace=True,

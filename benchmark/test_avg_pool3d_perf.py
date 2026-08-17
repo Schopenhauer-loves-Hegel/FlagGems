@@ -63,16 +63,64 @@ def avg_pool3d_input_fn(shape, dtype, device):
 
 
 class AvgPool3dBenchmark(base.GenericBenchmark):
-    def get_input_iter(self, dtype) -> Generator:
-        shapes_5d = [
-            (4, 3, 16, 56, 56),
-            (8, 64, 8, 28, 28),
-            (16, 128, 4, 14, 14),
-            (32, 256, 4, 7, 7),
-        ]
+    SHAPES_5D = [
+        (4, 3, 16, 56, 56),
+        (8, 64, 8, 28, 28),
+        (16, 128, 4, 14, 14),
+        (32, 256, 4, 7, 7),
+    ]
 
-        for shape in shapes_5d:
+    def get_input_iter(self, dtype) -> Generator:
+        for shape in self.SHAPES_5D:
             yield from self.input_fn(shape, dtype, self.device)
+
+    def get_case_iter(self, dtype) -> Generator:
+        ordinal = 0
+        for shape in self.SHAPES_5D:
+            configs = [
+                {
+                    "kernel_size": 3,
+                    "stride": 2,
+                    "padding": 1,
+                    "ceil_mode": False,
+                    "count_include_pad": True,
+                    "divisor_override": None,
+                }
+            ]
+            if base.Config.bench_level == consts.BenchLevel.COMPREHENSIVE:
+                configs.extend(
+                    [
+                        {**configs[0], "count_include_pad": False},
+                        {**configs[0], "ceil_mode": True},
+                    ]
+                )
+                if min(shape[-3:]) >= 2:
+                    configs.append(
+                        {
+                            "kernel_size": 2,
+                            "stride": 1,
+                            "padding": 0,
+                            "ceil_mode": False,
+                            "count_include_pad": True,
+                            "divisor_override": 3,
+                        }
+                    )
+            for config in configs:
+                yield self._case_from_plan(
+                    dtype,
+                    ordinal,
+                    base.BenchmarkCasePlan(
+                        shape={"input": shape},
+                        params=config,
+                        builder_args=(shape, config),
+                    ),
+                )
+                ordinal += 1
+
+    def materialize_case(self, case):
+        shape, config = case.builder_args[0].builder_args
+        inp = utils.generate_tensor_input(shape, case.dtype, self.device)
+        return inp, config
 
 
 @pytest.mark.avg_pool3d

@@ -30,6 +30,15 @@ def addcdiv__input_fn(shape, dtype, device):
     yield inp1, inp2, inp3, {"value": 0.5}
 
 
+def addcdiv__case_fn(shape, dtype):
+    del dtype
+    yield base.BenchmarkCasePlan(
+        shape={"self": shape, "tensor1": shape, "tensor2": shape},
+        params={"value": 0.5},
+        builder_args=(shape, 0),
+    )
+
+
 @pytest.mark.addcdiv_
 @pytest.mark.skipif(
     flag_gems.vendor_name == "tsingmicro", reason="Issue #4131: not working"
@@ -38,7 +47,8 @@ def test_addcdiv_():
     bench = base.GenericBenchmark(
         op_name="addcdiv_",
         torch_op=torch.Tensor.addcdiv_,
-        input_fn=addcdiv__input_fn,
+        case_fn=addcdiv__case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(addcdiv__input_fn),
         dtypes=consts.FLOAT_DTYPES,
         is_inplace=True,
     )

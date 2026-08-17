@@ -24,11 +24,20 @@ def _input_fn(shape, cur_dtype, device):
     yield inp, boundaries
 
 
+def _case_fn(shape, dtype):
+    del dtype
+    yield base.BenchmarkCasePlan(
+        shape={"input": shape, "boundaries": (5,)},
+        builder_args=(shape, 0),
+    )
+
+
 @pytest.mark.bucketize
 def test_bucketize_perf():
     bench = base.GenericBenchmark(
         op_name="bucketize",
-        input_fn=_input_fn,
+        case_fn=_case_fn,
+        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
         torch_op=torch.bucketize,
         dtypes=consts.FLOAT_DTYPES,
     )

@@ -44,6 +44,20 @@ def weight_norm_input_fn_last(shape, dtype, device):
     yield v, g, dim
 
 
+def _weight_norm_case_fn(dim_fn):
+    def inner(shape, dtype):
+        del dtype
+        dim = dim_fn(shape)
+        g_shape = tuple(1 if i != dim else shape[i] for i in range(len(shape)))
+        yield base.BenchmarkCasePlan(
+            shape={"v": shape, "g": g_shape},
+            params={"dim": dim},
+            builder_args=(shape, 0),
+        )
+
+    return inner
+
+
 @pytest.mark.weight_norm
 @pytest.mark.skipif(
     flag_gems.vendor_name == "tsingmicro", reason="Issue #4131: not working"
@@ -51,7 +65,10 @@ def weight_norm_input_fn_last(shape, dtype, device):
 def test_weight_norm_dim0():
     bench = base.GenericBenchmarkExcluse1D(
         op_name="weight_norm",
-        input_fn=weight_norm_input_fn,
+        case_fn=_weight_norm_case_fn(lambda shape: 0),
+        materialize_fn=base.materialize_from_generic_input_fn(
+            weight_norm_input_fn
+        ),
         torch_op=torch.ops.aten._weight_norm.default,
         dtypes=consts.FLOAT_DTYPES,
     )
@@ -65,7 +82,10 @@ def test_weight_norm_dim0():
 def test_weight_norm_dim_last():
     bench = base.GenericBenchmarkExcluse1D(
         op_name="weight_norm",
-        input_fn=weight_norm_input_fn_last,
+        case_fn=_weight_norm_case_fn(lambda shape: len(shape) - 1),
+        materialize_fn=base.materialize_from_generic_input_fn(
+            weight_norm_input_fn_last
+        ),
         torch_op=torch.ops.aten._weight_norm.default,
         dtypes=consts.FLOAT_DTYPES,
     )
