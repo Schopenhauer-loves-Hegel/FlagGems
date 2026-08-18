@@ -27,41 +27,50 @@ logger = logging.getLogger(__name__)
 
 @libentry()
 @triton.jit
-def cholesky_ex_kernel(A, L, N, batch_stride, stride_a, stride_l):
-    """Cholesky decomposition kernel.
+def cholesky_ex_kernel(A, L, N, batch_stride, BLOCK: tl.constexpr):
+    """*Vectorized* Cholesky decomposition kernel.
 
-    Each program computes one matrix in the batch.
+    Each program computes one matrix in the batch. The whole N x N matrix is
+    held in a BLOCK x BLOCK register tile and the factor is built one column at
+    a time, updating the whole trailing column with vector ops instead of the
+    previous single-thread scalar triple loop. This lets the thread block
+    cooperate so medium/large matrices are no longer catastrophically slow.
+    Padding rows/cols (index >= N) stay zero.
     """
     pid = program_id(0)
+    base = pid * batch_stride
 
-    # Each matrix is N*N elements; batch_stride is the stride between matrices
-    a_offset = pid * batch_stride
-    l_offset = pid * batch_stride
+    offs = tl.arange(0, BLOCK)
+    rr = offs[:, None]
+    cc = offs[None, :]
+    mask = (rr < N) & (cc < N)
 
-    # Sequential Cholesky: L[i,j] for j <= i
-    for i in range(N):
-        for j in range(i + 1):
-            # Accumulate in the input dtype to support float32 and float64
-            sum_val = tl.zeros((), dtype=A.dtype.element_ty)
+    A_tile = tl.load(A + base + rr * N + cc, mask=mask, other=0.0)
+    L_tile = tl.zeros((BLOCK, BLOCK), dtype=A_tile.dtype)
 
-            # sum(L[i,k] * L[j,k]) for k in [0, j)
-            if j > 0:
-                for k in range(j):
-                    sum_val = sum_val + tl.load(
-                        L + l_offset + i * stride_l + k
-                    ) * tl.load(L + l_offset + j * stride_l + k)
+    # Column-by-column Cholesky:  L[:, j] computed from A[:, j] and prior columns.
+    for j in range(N):
+        # dotcol[i] = sum_{k<j} L[i,k] * L[j,k]   (over already-computed columns)
+        Lj = tl.sum(tl.where(rr == j, L_tile, 0.0), axis=0)  # [BLOCK] = L[j, :]
+        prod = L_tile * Lj[None, :]  # L[i,k] * L[j,k]
+        # only sum columns k < j
+        kmask = offs < j
+        prod = tl.where(kmask[None, :], prod, 0.0)
+        dotcol = tl.sum(prod, axis=1)  # [BLOCK], indexed by i
 
-            if j == i:
-                # Diagonal: L[i,i] = sqrt(A[i,i] - sum)
-                a_diag = tl.load(A + a_offset + i * stride_a + i)
-                result = tl.sqrt(a_diag - sum_val)
-                tl.store(L + l_offset + i * stride_l + i, result)
-            else:
-                # Off-diagonal: L[i,j] = (A[i,j] - sum) / L[j,j]
-                a_val = tl.load(A + a_offset + i * stride_a + j)
-                l_diag = tl.load(L + l_offset + j * stride_l + j)
-                result = (a_val - sum_val) / l_diag
-                tl.store(L + l_offset + i * stride_l + j, result)
+        Acol = tl.sum(tl.where(cc == j, A_tile, 0.0), axis=1)  # [BLOCK] = A[:, j]
+        diff = Acol - dotcol
+
+        # Diagonal element L[j,j] = sqrt(diff[j]); off-diagonal L[i,j] = diff[i]/L[j,j]
+        djj = tl.sum(tl.where(offs == j, diff, 0.0), axis=0)
+        ljj = tl.sqrt(djj)
+        newcol = tl.where(offs > j, diff / ljj, 0.0)
+        newcol = tl.where(offs == j, ljj, newcol)  # [BLOCK], column j (i >= j)
+        newcol = tl.where(offs < N, newcol, 0.0)
+
+        L_tile = tl.where(cc == j, newcol[:, None], L_tile)
+
+    tl.store(L + base + rr * N + cc, L_tile, mask=mask)
 
 
 def linalg_cholesky_ex(A, *, upper=False, check_errors=False):
@@ -122,19 +131,12 @@ def linalg_cholesky_ex(A, *, upper=False, check_errors=False):
             eye = eye.unsqueeze(0)
         A_sym = A_sym + eye.expand(shape[:-2] + (n, n)) * eps
 
-    # For kernel: use contiguous 2D view
-    if len(shape) > 2:
-        A_kernel = A_sym.reshape(-1, n, n)
-        L_kernel = L.reshape(-1, n, n)
-        stride_a = A_kernel.stride(1)  # row stride within a matrix = n
-        stride_l = L_kernel.stride(1)
-        batch_stride = A_kernel.stride(0)  # stride between matrices = n * n
-    else:
-        A_kernel = A_sym
-        L_kernel = L
-        stride_a = A_sym.stride(0)
-        stride_l = L.stride(0)
-        batch_stride = stride_a * n  # n * n; pid=0 so a_offset = 0
+    # For kernel: use contiguous 2D view. A_sym is contiguous with row stride n
+    # and matrix stride n*n, matching the kernel's rr*N+cc indexing.
+    A_kernel = A_sym.reshape(-1, n, n).contiguous()
+    L_kernel = L.reshape(-1, n, n)
+    batch_stride = A_kernel.stride(0)  # stride between matrices = n * n
+    block = triton.next_power_of_2(n)
 
     grid = (batch_size,)
 
@@ -144,17 +146,11 @@ def linalg_cholesky_ex(A, *, upper=False, check_errors=False):
             L_kernel,
             n,
             batch_stride,
-            stride_a,
-            stride_l,
+            BLOCK=block,
         )
 
-    # Zero upper triangle
-    if len(shape) > 2:
-        L = L.reshape(-1, n, n)
-        L = torch.tril(L)
-        L = L.reshape(shape)
-    else:
-        L = torch.tril(L)
+    # Kernel already produces a lower-triangular factor (upper part is zero).
+    L = L_kernel.reshape(shape)
 
     if upper:
         L = L.transpose(-2, -1).conj()
