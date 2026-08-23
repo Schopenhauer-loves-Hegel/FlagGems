@@ -41,11 +41,27 @@ class TensorSplitBenchmark(base.Benchmark):
         ]
 
     def get_input_iter(self, cur_dtype) -> Generator:
-        for shape in self.shapes:
-            inp = base.generate_tensor_input(shape, cur_dtype, self.device)
+        for case in self.get_case_iter(cur_dtype):
+            yield self.materialize_case(case)
+
+    def get_case_iter(self, cur_dtype) -> Generator:
+        for ordinal, shape in enumerate(self.shapes):
             # Split into 3 sections
             sections = 3
-            yield inp, sections
+            yield self._case_from_plan(
+                cur_dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"input": shape},
+                    params={"indices_or_sections": sections, "dim": 0},
+                    builder_args=(shape, sections),
+                ),
+            )
+
+    def materialize_case(self, case):
+        shape, sections = case.builder_args[0].builder_args
+        inp = base.generate_tensor_input(shape, case.dtype, self.device)
+        return inp, sections
 
 
 @pytest.mark.tensor_split

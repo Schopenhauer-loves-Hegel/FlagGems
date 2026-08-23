@@ -36,6 +36,13 @@ else:
     ]
 
 
+def _bitwise_right_shift_(self, other):
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "bitwise_right_shift_", flag_gems.bitwise_right_shift_
+    )
+    return gems_op(self, other)
+
+
 @pytest.mark.bitwise_right_shift_
 @pytest.mark.parametrize("shapes", INPLACE_BITWISE_SHAPES)
 @pytest.mark.parametrize("dtype", utils.ALL_INT_DTYPES + [torch.uint8])
@@ -49,7 +56,6 @@ def test_bitwise_right_shift_(shapes, dtype):
     ref_b = utils.to_reference(res_b)
 
     ref_a.bitwise_right_shift_(ref_b)
-    with flag_gems.use_gems():
-        res_a.bitwise_right_shift_(res_b)
+    _bitwise_right_shift_(res_a, res_b)
 
     utils.gems_assert_close(res_a, ref_a, dtype)

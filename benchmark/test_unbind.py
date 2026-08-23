@@ -22,10 +22,26 @@ class UnbindBenchmark(base.Benchmark):
         self.shapes = UNBIND_SHAPES
 
     def get_input_iter(self, dtype):
-        for shape in self.shapes:
-            inp = torch.randn(shape, dtype=dtype, device=self.device)
+        for case in self.get_case_iter(dtype):
+            yield self.materialize_case(case)
+
+    def get_case_iter(self, dtype):
+        for ordinal, shape in enumerate(self.shapes):
             dim = 0
-            yield inp, dim
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"input": shape},
+                    params={"dim": dim},
+                    builder_args=(shape, dim),
+                ),
+            )
+
+    def materialize_case(self, case):
+        shape, dim = case.builder_args[0].builder_args
+        inp = torch.randn(shape, dtype=case.dtype, device=self.device)
+        return inp, dim
 
 
 @pytest.mark.unbind

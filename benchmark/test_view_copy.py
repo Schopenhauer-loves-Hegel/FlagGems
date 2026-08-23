@@ -12,17 +12,39 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
+
 import pytest
 import torch
 
 from . import base, consts
 
 
+class ViewCopyBenchmark(base.UnaryPointwiseBenchmark):
+    def get_case_iter(self, dtype):
+        for ordinal, shape in enumerate(self.shapes):
+            size = (-1,)
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"input": shape, "output": (math.prod(shape),)},
+                    params={"size": size},
+                    builder_args=(shape, size),
+                ),
+            )
+
+    def materialize_case(self, case):
+        shape, size = case.builder_args[0].builder_args
+        inp = base.generate_tensor_input(shape, case.dtype, self.device)
+        return inp, size
+
+
 @pytest.mark.view_copy
 def test_view_copy():
-    bench = base.UnaryPointwiseBenchmark(
+    bench = ViewCopyBenchmark(
         op_name="view_copy",
-        torch_op=lambda a: torch.view_copy(a, (-1,)),
+        torch_op=torch.view_copy,
         dtypes=consts.FLOAT_DTYPES,
     )
     bench.run()

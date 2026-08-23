@@ -20,12 +20,20 @@ from . import base, consts
 
 @pytest.mark.is_nonzero
 def test_is_nonzero():
-    def is_nonzero_input_fn(shape, dtype, device):
-        # is_nonzero only accepts single-element tensors
-        yield torch.tensor([1], dtype=dtype, device=device)
+    def is_nonzero_case_fn(shape, dtype):
+        del shape, dtype
+        yield base.BenchmarkCasePlan(
+            shape={"input": (1,)},
+            params={"value": 1},
+        )
+
+    def is_nonzero_materialize_fn(plan, dtype, device):
+        del plan
+        return (torch.tensor([1], dtype=dtype, device=device),)
 
     bench = base.GenericBenchmark(
-        input_fn=is_nonzero_input_fn,
+        case_fn=is_nonzero_case_fn,
+        materialize_fn=is_nonzero_materialize_fn,
         op_name="is_nonzero",
         torch_op=torch.is_nonzero,
         dtypes=consts.FLOAT_DTYPES,

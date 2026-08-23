@@ -4,22 +4,30 @@ import torch
 from . import base, consts
 
 
-def _resize_as_input_fn(shape, dtype, device):
-    # Create a tensor and a template with different shape but same numel
+def _resize_as_case_fn(shape, dtype):
+    del dtype
     numel = 1
-    for s in shape:
-        numel *= s
-    # Different shape with same numel
+    for size in shape:
+        numel *= size
     target_shape = (numel,)
+    yield base.BenchmarkCasePlan(
+        shape={"input": shape, "template": target_shape},
+        builder_args=(shape, target_shape),
+    )
+
+
+def _resize_as_materialize_fn(plan, dtype, device):
+    shape, target_shape = plan.builder_args
     inp = torch.randn(shape, dtype=dtype, device=device)
     template = torch.randn(target_shape, dtype=dtype, device=device)
-    yield inp, template
+    return inp, template
 
 
 @pytest.mark.resize_as
 def test_resize_as():
     bench = base.GenericBenchmark(
-        input_fn=_resize_as_input_fn,
+        case_fn=_resize_as_case_fn,
+        materialize_fn=_resize_as_materialize_fn,
         op_name="resize_as",
         torch_op=torch.Tensor.resize_as,
         dtypes=consts.FLOAT_DTYPES,
@@ -31,7 +39,8 @@ def test_resize_as():
 @pytest.mark.resize_as_
 def test_resize_as_():
     bench = base.GenericBenchmark(
-        input_fn=_resize_as_input_fn,
+        case_fn=_resize_as_case_fn,
+        materialize_fn=_resize_as_materialize_fn,
         op_name="resize_as_",
         torch_op=torch.Tensor.resize_as_,
         dtypes=consts.FLOAT_DTYPES,

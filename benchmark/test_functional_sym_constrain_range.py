@@ -18,9 +18,18 @@ import torch
 from . import base, consts
 
 
-def _functional_sym_constrain_range_input_fn(shape, cur_dtype, device):
-    dep_token = base.generate_tensor_input(shape, cur_dtype, device)
-    yield 5, 1, 10, dep_token
+def _functional_sym_constrain_range_case_fn(shape, dtype):
+    del dtype
+    yield base.BenchmarkCasePlan(
+        shape={"dep_token": shape},
+        params={"size": 5, "min": 1, "max": 10},
+        builder_args=(shape,),
+    )
+
+
+def _functional_sym_constrain_range_materialize_fn(plan, dtype, device):
+    dep_token = base.generate_tensor_input(plan.builder_args[0], dtype, device)
+    return 5, 1, 10, dep_token
 
 
 @pytest.mark.functional_sym_constrain_range
@@ -29,6 +38,7 @@ def test_functional_sym_constrain_range():
         op_name="functional_sym_constrain_range",
         torch_op=torch.ops.aten._functional_sym_constrain_range,
         dtypes=consts.FLOAT_DTYPES,
-        input_fn=_functional_sym_constrain_range_input_fn,
+        case_fn=_functional_sym_constrain_range_case_fn,
+        materialize_fn=_functional_sym_constrain_range_materialize_fn,
     )
     bench.run()

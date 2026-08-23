@@ -12,17 +12,39 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
+
 import pytest
 import torch
 
 from . import base, consts
 
 
+class ResizeBenchmark(base.UnaryPointwiseBenchmark):
+    def get_case_iter(self, dtype):
+        for ordinal, shape in enumerate(self.shapes):
+            size = [math.prod(shape)]
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"input": shape, "output": size},
+                    params={"size": size},
+                    builder_args=(shape, tuple(size)),
+                ),
+            )
+
+    def materialize_case(self, case):
+        shape, size = case.builder_args[0].builder_args
+        inp = base.generate_tensor_input(shape, case.dtype, self.device)
+        return inp, list(size)
+
+
 @pytest.mark.resize
 def test_resize():
-    bench = base.UnaryPointwiseBenchmark(
+    bench = ResizeBenchmark(
         op_name="resize",
-        torch_op=lambda x: torch.ops.aten.resize(x, [x.numel()]),
+        torch_op=torch.ops.aten.resize,
         dtypes=consts.FLOAT_DTYPES,
     )
     bench.run()
@@ -30,9 +52,10 @@ def test_resize():
 
 @pytest.mark.resize_
 def test_resize_():
-    bench = base.UnaryPointwiseBenchmark(
+    bench = ResizeBenchmark(
         op_name="resize_",
-        torch_op=lambda x: torch.ops.aten.resize_(x, [x.numel()]),
+        torch_op=torch.ops.aten.resize_,
         dtypes=consts.FLOAT_DTYPES,
+        is_inplace=True,
     )
     bench.run()

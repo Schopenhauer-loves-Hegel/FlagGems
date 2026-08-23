@@ -11,6 +11,11 @@ def _nextafter(*args, **kwargs):
     return gems_op(*args, **kwargs)
 
 
+def _nextafter_(*args, **kwargs):
+    gems_op = flag_gems.testing.resolve_gems_op("nextafter_", flag_gems.nextafter_)
+    return gems_op(*args, **kwargs)
+
+
 @pytest.mark.nextafter
 @pytest.mark.parametrize("shape", utils.POINTWISE_SHAPES)
 @pytest.mark.parametrize("dtype", utils.FLOAT_DTYPES)
@@ -36,8 +41,7 @@ def test_nextafter_(shape, dtype):
     ref_inp2 = utils.to_reference(inp2, True)
 
     ref_out = ref_inp1.nextafter_(ref_inp2)
-    with flag_gems.use_gems():
-        res_out = inp1.nextafter_(inp2)
+    res_out = _nextafter_(inp1, inp2)
 
     utils.gems_assert_close(res_out, ref_out, dtype)
     utils.gems_assert_close(inp1, ref_inp1, dtype)
@@ -105,9 +109,8 @@ def test_nextafter_inplace_is_self(shape, dtype):
 
     ref_out = ref_inp1.nextafter_(ref_inp2)
 
-    with flag_gems.use_gems():
-        captured = inp1
-        res_out = inp1.nextafter_(inp2)
+    captured = inp1
+    res_out = _nextafter_(inp1, inp2)
 
     assert res_out is captured
     utils.gems_assert_close(res_out, ref_out, dtype)
@@ -122,9 +125,8 @@ def test_nextafter_rejects_out(dtype):
     inp2 = torch.randn(16, dtype=dtype, device=flag_gems.device)
     out = torch.empty_like(inp1)
 
-    with flag_gems.use_gems():
-        with pytest.raises(TypeError):
-            inp1.nextafter_(inp2, out=out)
+    with pytest.raises(TypeError):
+        _nextafter_(inp1, inp2, out=out)
 
 
 # --- Edge-case / special-value tests ---

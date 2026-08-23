@@ -42,11 +42,13 @@ class ExpandBenchmark(base.Benchmark):
         self.shapes = EXPAND_SHAPES
 
     def get_input_iter(self, dtype):
-        # Expansion factors for deterministic benchmark
+        for case in self.get_case_iter(dtype):
+            yield self.materialize_case(case)
+
+    def get_case_iter(self, dtype):
         factors = [2, 3, 4]
-        for shape in self.shapes:
-            inp = torch.randn(shape, dtype=dtype, device=self.device)
-            input_shape = list(inp.shape)
+        for ordinal, shape in enumerate(self.shapes):
+            input_shape = list(shape)
             target_shape = list(input_shape)
             # Expand dimensions that are 1 using a fixed cycle of factors
             for i in range(len(target_shape)):
@@ -55,7 +57,20 @@ class ExpandBenchmark(base.Benchmark):
                         [j for j in range(i) if input_shape[j] == 1]
                     ) % len(factors)
                     target_shape[i] = input_shape[i] * factors[factor_idx]
-            yield inp, target_shape
+            yield self._case_from_plan(
+                dtype,
+                ordinal,
+                base.BenchmarkCasePlan(
+                    shape={"input": shape, "output": target_shape},
+                    params={"size": target_shape},
+                    builder_args=(shape, tuple(target_shape)),
+                ),
+            )
+
+    def materialize_case(self, case):
+        shape, target_shape = case.builder_args[0].builder_args
+        inp = torch.randn(shape, dtype=case.dtype, device=self.device)
+        return inp, list(target_shape)
 
 
 @pytest.mark.expand

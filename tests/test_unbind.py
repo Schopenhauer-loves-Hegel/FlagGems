@@ -17,6 +17,11 @@ UNBIND_SHAPES = [
 ]
 
 
+def _unbind(inp, dim=0):
+    gems_op = flag_gems.testing.resolve_gems_op("unbind", flag_gems.unbind)
+    return gems_op(inp, dim=dim)
+
+
 @pytest.mark.unbind
 @pytest.mark.parametrize("shape", UNBIND_SHAPES)
 @pytest.mark.parametrize("dim", [0, 1, 2, 3])
@@ -29,8 +34,7 @@ def test_unbind(shape, dim, dtype):
     ref_inp = utils.to_reference(inp)
 
     ref_out = torch.unbind(ref_inp, dim)
-    with flag_gems.use_gems():
-        res_out = torch.unbind(inp, dim)
+    res_out = _unbind(inp, dim)
 
     assert len(res_out) == len(
         ref_out
@@ -51,8 +55,7 @@ def test_unbind_default_dim(shape, dtype):
     ref_inp = utils.to_reference(inp)
 
     ref_out = torch.unbind(ref_inp)
-    with flag_gems.use_gems():
-        res_out = torch.unbind(inp)
+    res_out = _unbind(inp)
 
     assert len(res_out) == len(
         ref_out
@@ -71,8 +74,7 @@ def test_unbind_negative_dim(shape, dim, dtype):
     ref_inp = utils.to_reference(inp)
 
     ref_out = torch.unbind(ref_inp, dim)
-    with flag_gems.use_gems():
-        res_out = torch.unbind(inp, dim)
+    res_out = _unbind(inp, dim)
 
     assert len(res_out) == len(
         ref_out
