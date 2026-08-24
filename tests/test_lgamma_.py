@@ -30,8 +30,8 @@ def test_lgamma(shape, dtype):
     )  # lgamma requires positive values
     ref_inp = utils.to_reference(inp)
     ref_out = ref_inp.lgamma()
-    with flag_gems.use_gems():
-        res_out = inp.lgamma()
+    gems_op = flag_gems.testing.resolve_gems_op("lgamma", flag_gems.lgamma)
+    res_out = gems_op(inp)
     utils.gems_assert_close(res_out, ref_out, dtype)
 
 
@@ -45,7 +45,7 @@ def test_lgamma_(shape, dtype):
     )  # lgamma requires positive values
     ref_inp = utils.to_reference(inp.clone())
     ref_out = ref_inp.lgamma_()
-    with flag_gems.use_gems():
-        res_out = inp.lgamma_()
+    gems_op = flag_gems.testing.resolve_gems_op("lgamma_", flag_gems.lgamma_)
+    res_out = gems_op(inp)
     utils.gems_assert_close(res_out, ref_out, dtype)
     utils.gems_assert_close(inp, ref_inp, dtype)

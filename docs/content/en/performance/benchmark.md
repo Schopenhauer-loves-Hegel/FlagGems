@@ -111,13 +111,14 @@ cases approximately. The public operator ABI and default call arguments are not
 duplicated in the case list.
 
 External benchmark adapters can temporarily install a candidate implementation
-before entering `use_gems()`:
+in the direct operator route:
 
 ```python
-with flag_gems.testing.override_registered_op("addmm_", candidate):
-    with flag_gems.use_gems(include=["addmm_"]):
-        ...
+with flag_gems.testing.override_gems_op("addmm_", candidate):
+    gems_op = flag_gems.testing.resolve_gems_op("addmm_", flag_gems.addmm_)
+    gems_op(self, mat1, mat2, beta=beta, alpha=alpha)
 ```
 
-The operator name must match exactly one public registry entry. The context
-manager restores both registration tables, including when execution raises.
+Correctness tests and benchmarks use the same `resolve_gems_op()` route. The
+context manager restores the previous direct callable when execution exits and
+does not mutate the PyTorch dispatcher registration tables.

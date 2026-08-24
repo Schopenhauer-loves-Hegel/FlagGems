@@ -59,7 +59,10 @@ def test_silu_backward(shape, dtype):
     ref_grad = utils.to_reference(res_grad, True)
 
     ref_in_grad = torch.ops.aten.silu_backward(ref_grad, ref_inp)
-    with flag_gems.use_gems():
-        res_in_grad = torch.ops.aten.silu_backward(res_grad, res_inp)
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "silu_backward",
+        flag_gems.silu_backward,
+    )
+    res_in_grad = gems_op(res_grad, res_inp)
 
     utils.gems_assert_close(res_in_grad, ref_in_grad, dtype)

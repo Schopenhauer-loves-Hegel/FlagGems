@@ -38,8 +38,11 @@ FEATURE_DROPOUT_SHAPES = (
 @pytest.mark.parametrize("dtype", FLOAT_DTYPES)
 def test_feature_dropout(shape, p, dtype):
     inp = torch.randn(shape, dtype=dtype, device=flag_gems.device)
-    with flag_gems.use_gems():
-        res_out = torch.feature_dropout(inp, p, True)
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "feature_dropout",
+        flag_gems.feature_dropout,
+    )
+    res_out = gems_op(inp, p, True)
     assert res_out.shape == inp.shape
     batch_size, num_channels = shape[0], shape[1]
     scale = 1.0 / (1.0 - p)
@@ -72,8 +75,11 @@ def test_feature_dropout_no_train(shape, dtype):
     inp = torch.randn(shape, dtype=dtype, device=flag_gems.device)
     ref_inp = to_reference(inp)
     ref = torch.feature_dropout(ref_inp, 0.5, False)
-    with flag_gems.use_gems():
-        res_out = torch.feature_dropout(inp, 0.5, False)
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "feature_dropout",
+        flag_gems.feature_dropout,
+    )
+    res_out = gems_op(inp, 0.5, False)
     gems_assert_close(res_out, ref, dtype)
 
 
@@ -84,8 +90,11 @@ def test_feature_dropout_p_zero(shape, dtype):
     inp = torch.randn(shape, dtype=dtype, device=flag_gems.device)
     ref_inp = to_reference(inp)
     ref = torch.feature_dropout(ref_inp, 0.0, True)
-    with flag_gems.use_gems():
-        res_out = torch.feature_dropout(inp, 0.0, True)
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "feature_dropout",
+        flag_gems.feature_dropout,
+    )
+    res_out = gems_op(inp, 0.0, True)
     gems_assert_close(res_out, ref, dtype)
 
 
@@ -95,8 +104,11 @@ def test_feature_dropout_p_zero(shape, dtype):
 def test_feature_dropout_p_one(shape, dtype):
     inp = torch.randn(shape, dtype=dtype, device=flag_gems.device)
     ref = to_reference(torch.zeros_like(inp))
-    with flag_gems.use_gems():
-        res_out = torch.feature_dropout(inp, 1.0, True)
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "feature_dropout",
+        flag_gems.feature_dropout,
+    )
+    res_out = gems_op(inp, 1.0, True)
     gems_assert_equal(res_out, ref)
 
 

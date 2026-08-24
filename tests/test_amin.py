@@ -41,8 +41,8 @@ def test_amin(shape, dim, keepdim, dtype):
     ref_inp = utils.to_reference(inp)
 
     ref_out = torch.amin(ref_inp, dim=dim, keepdim=keepdim)
-    with flag_gems.use_gems():
-        res_out = torch.amin(inp, dim=dim, keepdim=keepdim)
+    gems_op = flag_gems.testing.resolve_gems_op("amin", flag_gems.amin)
+    res_out = gems_op(inp, dim=dim, keepdim=keepdim)
 
     utils.gems_assert_equal(res_out, ref_out)
 

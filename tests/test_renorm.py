@@ -46,8 +46,8 @@ def test_renorm(shape, dtype, p, dim):
     ref_inp = utils.to_reference(inp)
 
     ref_out = torch.renorm(ref_inp, p, dim, maxnorm)
-    with flag_gems.use_gems():
-        res_out = torch.renorm(inp, p, dim, maxnorm)
+    gems_op = flag_gems.testing.resolve_gems_op("renorm", flag_gems.renorm)
+    res_out = gems_op(inp, p, dim, maxnorm)
 
     utils.gems_assert_close(res_out, ref_out, dtype)
 

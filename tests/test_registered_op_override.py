@@ -63,7 +63,7 @@ def test_override_registered_op_requires_exact_public_key():
             pass
 
 
-def test_override_gems_op_is_independent_from_dispatcher_registry():
+def test_override_gems_op_does_not_mutate_dispatcher_registry():
     old_config = flag_gems._FULL_CONFIG
     old_by_func = flag_gems.FULL_CONFIG_BY_FUNC
     default = lambda value: ("default", value)

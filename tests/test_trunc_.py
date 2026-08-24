@@ -42,7 +42,7 @@ def test_trunc_(shape, dtype):
     ref_inp = utils.to_reference(inp.clone())
 
     ref_out = ref_inp.trunc_()
-    with flag_gems.use_gems():
-        res_out = inp.trunc_()
+    gems_op = flag_gems.testing.resolve_gems_op("trunc_", flag_gems.trunc_)
+    res_out = gems_op(inp)
 
     utils.gems_assert_equal(res_out, ref_out)

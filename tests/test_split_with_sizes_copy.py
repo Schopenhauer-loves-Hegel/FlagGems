@@ -52,8 +52,11 @@ def test_split_with_sizes_copy(shape, dtype):
     dim = 0
 
     ref_out = torch.split_with_sizes_copy(ref_inp, split_sizes, dim=dim)
-    with flag_gems.use_gems():
-        res_out = torch.split_with_sizes_copy(inp, split_sizes, dim=dim)
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "split_with_sizes_copy",
+        flag_gems.split_with_sizes_copy,
+    )
+    res_out = gems_op(inp, split_sizes, dim=dim)
 
     assert len(res_out) == len(ref_out), "Number of splits mismatch"
     for i, (res, ref) in enumerate(zip(res_out, ref_out)):
@@ -73,8 +76,11 @@ def test_split_with_sizes_copy_different_dims(shape, dtype, dim):
     split_sizes = [dim_size // 4, dim_size // 4, dim_size - 2 * (dim_size // 4)]
 
     ref_out = torch.split_with_sizes_copy(ref_inp, split_sizes, dim=dim)
-    with flag_gems.use_gems():
-        res_out = torch.split_with_sizes_copy(inp, split_sizes, dim=dim)
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "split_with_sizes_copy",
+        flag_gems.split_with_sizes_copy,
+    )
+    res_out = gems_op(inp, split_sizes, dim=dim)
 
     assert len(res_out) == len(ref_out), "Number of splits mismatch"
     for i, (res, ref) in enumerate(zip(res_out, ref_out)):
@@ -93,8 +99,11 @@ def test_split_with_sizes_copy_edge_cases(shape, dtype):
     dim = 0
 
     ref_out = torch.split_with_sizes_copy(ref_inp, split_sizes, dim=dim)
-    with flag_gems.use_gems():
-        res_out = torch.split_with_sizes_copy(inp, split_sizes, dim=dim)
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "split_with_sizes_copy",
+        flag_gems.split_with_sizes_copy,
+    )
+    res_out = gems_op(inp, split_sizes, dim=dim)
 
     assert len(res_out) == len(ref_out), "Number of splits mismatch"
     for i, (res, ref) in enumerate(zip(res_out, ref_out)):

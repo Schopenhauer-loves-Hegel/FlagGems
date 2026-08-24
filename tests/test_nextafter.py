@@ -181,7 +181,7 @@ def test_nextafter_nan(dtype):
     # The float32 path uses libdevice nextafter which handles NaN correctly.
     # Skip float16/bf16 here; NaN handling is verified via the float32 path.
     if dtype in (torch.float16, torch.bfloat16):
-        return
+        pytest.skip("NaN handling is covered by the float32 path")
     device = flag_gems.device
     nan_val = float("nan")
     normal_val = 1.0

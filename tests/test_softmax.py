@@ -50,8 +50,8 @@ def test_softmax(shape, dtype, dim, neg_inf):
     ref_inp = utils.to_reference(inp, True)
 
     ref_out = torch.nn.functional.softmax(ref_inp, dim=dim)
-    with flag_gems.use_gems():
-        res_out = torch.nn.functional.softmax(inp, dim=dim)
+    gems_op = flag_gems.testing.resolve_gems_op("softmax", flag_gems.softmax)
+    res_out = gems_op(inp, dim=dim)
 
     utils.gems_assert_close(res_out, ref_out, dtype, equal_nan=True)
 

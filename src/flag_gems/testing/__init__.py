@@ -120,8 +120,8 @@ def override_registered_op(
 ) -> Iterator[Callable]:
     """Temporarily replace exactly one registered operator implementation.
 
-    The override must be installed before entering ``flag_gems.use_gems()``.
-    Registry state is restored even if the test raises.
+    Kept for standalone dispatcher smoke tests and compatibility with archived
+    candidates. KernelGen's evaluation path uses ``override_gems_op`` only.
     """
 
     if not isinstance(operator, str) or not operator:
@@ -129,8 +129,6 @@ def override_registered_op(
     if not callable(replacement):
         raise TypeError("replacement must be callable.")
 
-    # Imported lazily because flag_gems imports this testing module while its
-    # registration table is still being constructed.
     import flag_gems as package
 
     with _REGISTERED_OP_OVERRIDE_LOCK:
@@ -172,6 +170,7 @@ def override_registered_op(
         finally:
             package._FULL_CONFIG = old_config
             package.FULL_CONFIG_BY_FUNC = old_by_func
+
 
 if runtime.device.vendor_name == "kunlunxin":
     RESOLUTION = {

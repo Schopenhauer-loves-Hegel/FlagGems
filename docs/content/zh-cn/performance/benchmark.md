@@ -150,13 +150,13 @@ reduction、unary 和 binary 等公共 family 在基类统一提供该契约；�
 自定义 benchmark 必须实现相同两阶段。未适配的 legacy benchmark 会直接报错，不会近似
 重建 case。公开 ABI 和默认调用参数不在 case list 中重复保存。
 
-外部 benchmark adapter 可以在进入 `use_gems()` 前临时安装 candidate：
+外部 benchmark adapter 可以在直接算子入口上临时安装 candidate：
 
 ```python
-with flag_gems.testing.override_registered_op("addmm_", candidate):
-    with flag_gems.use_gems(include=["addmm_"]):
-        ...
+with flag_gems.testing.override_gems_op("addmm_", candidate):
+    gems_op = flag_gems.testing.resolve_gems_op("addmm_", flag_gems.addmm_)
+    gems_op(self, mat1, mat2, beta=beta, alpha=alpha)
 ```
 
-operator 名必须精确匹配唯一一条公开注册记录。即使执行过程抛出异常，context manager
-也会恢复两张注册表。
+correctness 和 benchmark 统一通过 `resolve_gems_op()` 调用。context manager 退出时
+恢复原有直接 callable，不修改 PyTorch dispatcher 注册表。
