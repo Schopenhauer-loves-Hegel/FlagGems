@@ -61,6 +61,8 @@ def test_roll_single_dim(shape, dtype, shifts_dims):
     )
     ref_out = torch.roll(ref_inp, shifts, dims)
 
+    if flag_gems.vendor_name == "ascend" and dtype == torch.int16:
+        res_out = res_out.cpu()
     utils.gems_assert_equal(res_out, ref_out)
 
 

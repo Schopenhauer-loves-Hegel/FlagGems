@@ -97,6 +97,8 @@ def test_max_unpool2d(shape, pool_cfg, dtype):
         ref_pooled, ref_indices.to(torch.int64), output_size
     )
 
+    if flag_gems.vendor_name == "ascend":
+        res_out = res_out.cpu()
     utils.gems_assert_close(res_out, ref_out, dtype)
 
 
@@ -133,4 +135,6 @@ def test_max_unpool2d_non_contiguous(dtype):
         ref_pooled, ref_indices.to(torch.int64), output_size
     )
 
+    if flag_gems.vendor_name == "ascend":
+        res_out = res_out.cpu()
     utils.gems_assert_close(res_out, ref_out, dtype)
