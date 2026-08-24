@@ -47,6 +47,21 @@ def _reference_cudnn_convolution(
     deterministic,
     allow_tf32,
 ):
+    if flag_gems.vendor_name == "ascend":
+        convolution = {
+            3: torch.conv1d,
+            4: torch.conv2d,
+            5: torch.conv3d,
+        }[inp.dim()]
+        return convolution(
+            inp,
+            weight,
+            None,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+        )
     # Iluvatar's native cudnn_convolution cannot select an algorithm for 1D
     # inputs, although conv1d implements the same no-bias reference semantics.
     if flag_gems.vendor_name == "iluvatar" and inp.dim() == 3:

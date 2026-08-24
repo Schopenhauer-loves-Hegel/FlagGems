@@ -47,7 +47,9 @@ def test_roll_single_dim(shape, dtype, shifts_dims):
     if dtype in utils.ALL_FLOAT_DTYPES:
         inp = torch.randn(shape, dtype=dtype, device=flag_gems.device)
     else:
-        inp = torch.randint(-1000, 1000, shape, device=flag_gems.device).to(dtype)
+        inp = torch.randint(
+            -1000, 1000, shape, dtype=torch.int32, device=flag_gems.device
+        ).to(dtype)
     ref_inp = utils.to_reference(inp, False)
 
     ref_out = torch.roll(ref_inp, shifts, dims)
