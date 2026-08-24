@@ -63,7 +63,16 @@ class LinearBackwardBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        batch, in_features = case.builder_args[0].builder_args[0]
+        out_features = in_features * 2
+        input = torch.randn(batch, in_features, dtype=case.dtype, device=self.device)
+        weight = torch.randn(
+            out_features, in_features, dtype=case.dtype, device=self.device
+        )
+        grad_output = torch.randn(
+            batch, out_features, dtype=case.dtype, device=self.device
+        )
+        return input, grad_output, weight, (True, True, True)
 
 
 @pytest.mark.linear_backward

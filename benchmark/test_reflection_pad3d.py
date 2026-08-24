@@ -61,7 +61,8 @@ class ReflectionPad3dBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        config = case.builder_args[0].builder_args[0]
+        return next(_input_fn(config, case.dtype, self.device))
 
 
 @pytest.mark.reflection_pad3d
@@ -124,7 +125,8 @@ class ReflectionPad3dOutBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        config = case.builder_args[0].builder_args[0]
+        return next(_input_fn_out(config, case.dtype, self.device))
 
 
 @pytest.mark.reflection_pad3d_out

@@ -80,7 +80,17 @@ class ReflectionPad3dBackwardBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape, padding = case.builder_args[0].builder_args[0]
+        N, C, D, H, W = shape
+        pad_d0, pad_d1, pad_h0, pad_h1, pad_w0, pad_w1 = padding
+        D_out = D + pad_d0 + pad_d1
+        H_out = H + pad_h0 + pad_h1
+        W_out = W + pad_w0 + pad_w1
+        x = torch.randn(shape, dtype=case.dtype, device=self.device)
+        grad_output = torch.ones(
+            (N, C, D_out, H_out, W_out), dtype=case.dtype, device=self.device
+        )
+        return grad_output, x, padding
 
 
 @pytest.mark.reflection_pad3d_backward

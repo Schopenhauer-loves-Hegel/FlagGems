@@ -115,7 +115,36 @@ class Col2ImBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        config = case.builder_args[0].builder_args[0]
+        (
+            batch,
+            channels,
+            kernel_size,
+            output_size,
+            stride,
+            padding,
+            dilation,
+        ) = config
+        kernel_h, kernel_w = kernel_size
+        output_h, output_w = output_size
+        stride_h, stride_w = stride
+        padding_h, padding_w = padding
+        dilation_h, dilation_w = dilation
+        L_h = (
+            output_h + 2 * padding_h - dilation_h * (kernel_h - 1) - 1
+        ) // stride_h + 1
+        L_w = (
+            output_w + 2 * padding_w - dilation_w * (kernel_w - 1) - 1
+        ) // stride_w + 1
+        L = L_h * L_w
+        inp = torch.randn(
+            batch,
+            channels * kernel_h * kernel_w,
+            L,
+            device=self.device,
+            dtype=case.dtype,
+        )
+        return inp, output_size, kernel_size, dilation, padding, stride
 
 
 @pytest.mark.col2im

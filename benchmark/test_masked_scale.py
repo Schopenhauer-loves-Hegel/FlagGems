@@ -58,7 +58,16 @@ class MaskedScaleBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape = case.builder_args[0].builder_args[0]
+        inp = utils.generate_tensor_input(shape, case.dtype, self.device)
+        if flag_gems.vendor_name == "cambricon":
+            mask = torch.randint(0, 2, shape, dtype=torch.uint8, device="cpu").to(
+                self.device
+            )
+        else:
+            mask = torch.randint(0, 2, shape, dtype=torch.uint8, device=self.device)
+        scale = 2.0
+        return inp, mask, scale
 
 
 # _masked_scale only supports float32 on most backends.

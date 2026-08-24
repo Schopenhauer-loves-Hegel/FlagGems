@@ -58,7 +58,12 @@ class RenormBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape = case.builder_args[0].builder_args[0]
+        x = torch.randn(shape, dtype=case.dtype, device=self.device)
+        p = 2.0
+        dim = 1 if len(shape) > 1 else 0
+        maxnorm = 1.0
+        return x, p, dim, maxnorm
 
 
 @pytest.mark.renorm

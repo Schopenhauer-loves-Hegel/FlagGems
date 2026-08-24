@@ -63,7 +63,9 @@ class IsAllTrueBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape = case.builder_args[0].builder_args[0]
+        inp = torch.randint(0, 2, shape, dtype=torch.bool, device=self.device)
+        return inp,
 
 
 @pytest.mark.is_all_true

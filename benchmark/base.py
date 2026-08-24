@@ -478,27 +478,6 @@ class Benchmark:
             f"{type(self).__name__} cannot materialize benchmark case specs."
         )
 
-    def _build_inputs_from_legacy_shape_case(self, case: BenchmarkCaseSpec):
-        """Use an existing one-shape input loop as the materialization stage.
-
-        Custom benchmark migrations may retain their proven tensor-construction
-        loop while moving all case enumeration into ``get_case_iter``. Their
-        private plan must store ``(raw_shape, input_index)``.
-        """
-
-        raw_shape, input_index = case.builder_args[0].builder_args
-        original_shapes = self.shapes
-        self.shapes = [raw_shape]
-        try:
-            for index, input in enumerate(self.get_input_iter(case.dtype)):
-                if index == input_index:
-                    return input
-        finally:
-            self.shapes = original_shapes
-        raise ValueError(
-            f"Input loop did not produce case index {input_index} for {raw_shape}."
-        )
-
     def _collect_cases(self) -> Tuple[BenchmarkCaseSpec, ...]:
         if not self.supports_cases():
             raise ValueError(

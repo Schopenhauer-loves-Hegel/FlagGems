@@ -41,7 +41,10 @@ def test_special_hermite_polynomial_h():
                 )
 
         def build_inputs(self, case):
-            return self._build_inputs_from_legacy_shape_case(case)
+            shape = case.builder_args[0].builder_args[0]
+            inp1 = base.generate_tensor_input(shape, case.dtype, self.device)
+            inp2 = torch.randint(0, 10, shape, device=self.device).to(case.dtype)
+            return inp1, inp2
 
     bench = _HermiteBenchmark(
         op_name="special_hermite_polynomial_h",

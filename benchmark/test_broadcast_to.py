@@ -50,7 +50,9 @@ class BroadcastToBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        src_shape, target_shape = case.builder_args[0].builder_args[0]
+        x = base.generate_tensor_input(src_shape, case.dtype, self.device)
+        return (x, target_shape)
 
 
 @pytest.mark.broadcast_to

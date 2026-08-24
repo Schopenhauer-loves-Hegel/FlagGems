@@ -53,7 +53,9 @@ class Rot90Benchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape = case.builder_args[0].builder_args[0]
+        inp = torch.randn(shape, dtype=case.dtype, device=self.device)
+        return inp, 1, [0, 1]
 
 
 @pytest.mark.rot90

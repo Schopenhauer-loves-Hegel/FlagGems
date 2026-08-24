@@ -68,7 +68,13 @@ class MaxUnpool2dBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape = case.builder_args[0].builder_args[0]
+        n, c, h, w = shape
+        x = torch.randn(shape, dtype=case.dtype, device=self.device)
+        pool = torch.nn.MaxPool2d(2, stride=2, return_indices=True)
+        pooled, indices = pool(x.contiguous())
+        output_size = [h, w]
+        return pooled, indices.to(torch.int64), output_size
 
 
 @pytest.mark.max_unpool2d

@@ -59,7 +59,14 @@ class CdistBackwardBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape = case.builder_args[0].builder_args[0]
+        batch, n1, dim = shape
+        n2 = n1 // 2 + 1
+        x1 = torch.randn(shape, dtype=case.dtype, device=self.device)
+        x2 = torch.randn(batch, n2, dim, dtype=case.dtype, device=self.device)
+        cdist = torch.cdist(x1, x2, p=2.0)
+        grad = torch.randn(batch, n1, n2, dtype=case.dtype, device=self.device)
+        return grad, x1, x2, 2.0, cdist
 
 
 @pytest.mark.cdist_backward

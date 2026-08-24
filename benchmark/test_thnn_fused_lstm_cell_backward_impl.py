@@ -104,7 +104,29 @@ class LSTMCellBackwardBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape = case.builder_args[0].builder_args[0]
+        batch_size, hidden_size = shape
+        input_gates = torch.randn(
+            batch_size, 4 * hidden_size, dtype=case.dtype, device=self.device
+        )
+        hidden_gates = torch.randn(
+            batch_size, 4 * hidden_size, dtype=case.dtype, device=self.device
+        )
+        cx = torch.randn(
+            batch_size, hidden_size, dtype=case.dtype, device=self.device
+        )
+        input_bias = torch.zeros(
+            4 * hidden_size, dtype=case.dtype, device=self.device
+        )
+        hidden_bias = torch.randn(
+            4 * hidden_size, dtype=case.dtype, device=self.device
+        )
+        hx, cy, workspace = torch.ops.aten._thnn_fused_lstm_cell(
+            input_gates, hidden_gates, cx, input_bias, hidden_bias
+        )
+        grad_hy = torch.randn_like(hx)
+        grad_cy = torch.randn_like(cy)
+        return grad_hy, grad_cy, cx, cy, workspace, True
 
 
 @pytest.mark.thnn_fused_lstm_cell_backward_impl

@@ -58,7 +58,13 @@ class UnsafeMaskedIndexBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape = case.builder_args[0].builder_args[0]
+        n = shape[0]
+        inp = torch.randn(shape, dtype=case.dtype, device=self.device)
+        mask = torch.rand(shape, device=self.device) > 0.3
+        indices = torch.randint(0, max(n, 1), shape, device=self.device)
+        fill = 0.0
+        return inp, mask, [indices], fill
 
 
 @pytest.mark.unsafe_masked_index

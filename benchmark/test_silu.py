@@ -66,7 +66,10 @@ class SiluBackwardBenchmark(base.UnaryPointwiseBenchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape = case.builder_args[0].builder_args[0]
+        inp = utils.generate_tensor_input(shape, case.dtype, self.device)
+        grad_out = torch.randn_like(inp)
+        return grad_out, inp
 
 
 @pytest.mark.silu_backward

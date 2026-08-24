@@ -49,7 +49,14 @@ class RreluWithNoiseFunctionalBenchmark(base.UnaryPointwiseBenchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape = case.builder_args[0].builder_args[0]
+        inp = utils.generate_tensor_input(shape, case.dtype, self.device)
+        noise = torch.rand_like(inp)
+        lower = 0.125
+        upper = 1.0 / 3.0
+        training = True
+        generator = None
+        return inp, noise, lower, upper, training, generator
 
 
 @pytest.mark.rrelu_with_noise_functional

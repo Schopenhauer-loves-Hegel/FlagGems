@@ -66,7 +66,15 @@ class SplitWithSizesCopyBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape = case.builder_args[0].builder_args[0]
+        inp = torch.randn(shape, dtype=case.dtype, device=self.device)
+        dim_size = shape[0]
+        split_sizes = [
+            dim_size // 4,
+            dim_size // 4,
+            dim_size - 2 * (dim_size // 4),
+        ]
+        return inp, split_sizes, 0
 
 
 @pytest.mark.split_with_sizes_copy

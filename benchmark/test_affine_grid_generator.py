@@ -55,7 +55,12 @@ class AffineGridBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape = case.builder_args[0].builder_args[0]
+        N, H, W = shape
+        theta = torch.randn((N, 2, 3), dtype=case.dtype, device=self.device)
+        size = [N, 3, H, W]
+        align_corners = False
+        return theta, size, align_corners
 
 
 @pytest.mark.affine_grid_generator

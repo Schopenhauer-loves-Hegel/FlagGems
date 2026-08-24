@@ -80,7 +80,17 @@ class UnsafeMaskedIndexPutAccumulateBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        inp_shape, mask_shape, indices_shape, values_shape = case.builder_args[0].builder_args[0]
+        inp = torch.randn(inp_shape, dtype=case.dtype, device=self.device)
+        mask = torch.randint(
+            0, 2, mask_shape, dtype=torch.int32, device=self.device
+        )
+        flat_indices = torch.randint(
+            0, max(inp.numel(), 1), indices_shape, device=self.device
+        )
+        values = torch.randn(values_shape, dtype=case.dtype, device=self.device)
+        idx_tuple = _flat_to_per_dim_indices(flat_indices, inp_shape)
+        return inp, mask, idx_tuple, values
 
 
 @pytest.mark.unsafe_masked_index_put_accumulate

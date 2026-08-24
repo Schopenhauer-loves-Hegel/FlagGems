@@ -40,7 +40,8 @@ class MedianNoDimBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape = case.builder_args[0].builder_args[0]
+        return (utils.generate_tensor_input(shape, case.dtype, self.device),)
 
 
 class MedianReductionBenchmark(base.Benchmark):

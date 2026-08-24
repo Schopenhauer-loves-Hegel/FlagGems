@@ -73,7 +73,15 @@ class AmpForeachNonFiniteCheckAndUnscaleBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape = case.builder_args[0].builder_args[0]
+        second_shape = (max(1, shape[0] // 2),) + shape[1:]
+        tensors = [
+            torch.randn(shape, device=self.device, dtype=case.dtype),
+            torch.randn(second_shape, device=self.device, dtype=case.dtype),
+        ]
+        inv_scale = torch.tensor(2.0, device=self.device, dtype=torch.float32)
+        found_inf = torch.tensor(0.0, device=self.device, dtype=torch.float32)
+        return tensors, found_inf, inv_scale
 
 
 @pytest.mark.amp_foreach_non_finite_check_and_unscale_

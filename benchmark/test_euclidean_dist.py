@@ -49,7 +49,10 @@ class EuclideanDistBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        (n1, d), (n2, d2) = case.builder_args[0].builder_args[0]
+        x1 = torch.randn(n1, d, dtype=case.dtype, device=self.device)
+        x2 = torch.randn(n2, d2, dtype=case.dtype, device=self.device)
+        return x1, x2
 
 
 @pytest.mark.euclidean_dist

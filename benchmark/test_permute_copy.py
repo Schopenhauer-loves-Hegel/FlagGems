@@ -50,7 +50,9 @@ class PermuteCopyBenchmark(base.Benchmark):
             )
 
     def build_inputs(self, case):
-        return self._build_inputs_from_legacy_shape_case(case)
+        shape, dims = case.builder_args[0].builder_args[0]
+        x = torch.randn(shape, dtype=case.dtype, device=self.device)
+        return x, dims
 
 
 @pytest.mark.permute_copy
