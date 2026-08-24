@@ -68,25 +68,34 @@ def test_max_unpool2d(shape, pool_cfg, dtype):
         )
     # Create input tensor
     inp = torch.randn(shape, dtype=dtype, device=flag_gems.device)
-    ref_inp = utils.to_reference(inp)
+    ref_inp = (
+        inp.cpu()
+        if flag_gems.vendor_name == "ascend"
+        else utils.to_reference(inp)
+    )
 
     # Apply max_pool2d to get pooled output and indices
     pool = torch.nn.MaxPool2d(
         kernel_size, stride=stride, padding=padding, return_indices=True
     )
     ref_pooled, ref_indices = pool(ref_inp.float().contiguous())
-    pooled = ref_pooled.to(dtype=dtype, device=flag_gems.device)
-    indices = ref_indices.to(device=flag_gems.device)
+    if flag_gems.vendor_name == "ascend" or (
+        flag_gems.vendor_name == "cambricon" and utils.TO_CPU
+    ):
+        pooled = ref_pooled.to(dtype=dtype, device=flag_gems.device)
+        indices = ref_indices.to(device=flag_gems.device)
+    else:
+        pooled, indices = pool(inp.contiguous())
 
     # Get output_size for unpooling
     output_size = [inp.shape[2], inp.shape[3]]
+
+    res_out = _max_unpool2d(pooled, indices.to(torch.int64), output_size)
 
     # Reference unpool via aten - indices must be int64
     ref_out = torch.ops.aten.max_unpool2d(
         ref_pooled, ref_indices.to(torch.int64), output_size
     )
-
-    res_out = _max_unpool2d(pooled, indices.to(torch.int64), output_size)
 
     utils.gems_assert_close(res_out, ref_out, dtype)
 
@@ -102,16 +111,26 @@ def test_max_unpool2d_non_contiguous(dtype):
 
     pool = torch.nn.MaxPool2d(2, stride=2, return_indices=True)
     output_size = [8, 8]
-    ref_inp_noncontig = utils.to_reference(inp_noncontig)
-    ref_pooled, ref_indices = pool(ref_inp_noncontig.float().contiguous())
-    pooled_noncontig = ref_pooled.to(dtype=dtype, device=flag_gems.device)
-    indices_noncontig = ref_indices.to(device=flag_gems.device)
-    ref_out = torch.ops.aten.max_unpool2d(
-        ref_pooled, ref_indices.to(torch.int64), output_size
+    ref_inp_noncontig = (
+        inp_noncontig.cpu()
+        if flag_gems.vendor_name == "ascend"
+        else utils.to_reference(inp_noncontig)
     )
-
+    ref_pooled, ref_indices = pool(ref_inp_noncontig.float().contiguous())
+    if flag_gems.vendor_name == "ascend" or (
+        flag_gems.vendor_name == "cambricon" and utils.TO_CPU
+    ):
+        pooled_noncontig = ref_pooled.to(dtype=dtype, device=flag_gems.device)
+        indices_noncontig = ref_indices.to(device=flag_gems.device)
+    else:
+        pooled_noncontig, indices_noncontig = pool(inp_noncontig)
+        ref_pooled = utils.to_reference(pooled_noncontig)
+        ref_indices = utils.to_reference(indices_noncontig)
     res_out = _max_unpool2d(
         pooled_noncontig, indices_noncontig.to(torch.int64), output_size
+    )
+    ref_out = torch.ops.aten.max_unpool2d(
+        ref_pooled, ref_indices.to(torch.int64), output_size
     )
 
     utils.gems_assert_close(res_out, ref_out, dtype)

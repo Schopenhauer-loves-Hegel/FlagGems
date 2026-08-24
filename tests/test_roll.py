@@ -46,14 +46,20 @@ def test_roll_single_dim(shape, dtype, shifts_dims):
 
     if dtype in utils.ALL_FLOAT_DTYPES:
         inp = torch.randn(shape, dtype=dtype, device=flag_gems.device)
+    elif flag_gems.vendor_name == "ascend" and dtype == torch.int16:
+        inp = torch.randint(-1000, 1000, shape, dtype=dtype, device="cpu").to(
+            flag_gems.device
+        )
     else:
-        inp = torch.randint(
-            -1000, 1000, shape, dtype=torch.int32, device=flag_gems.device
-        ).to(dtype)
-    ref_inp = utils.to_reference(inp, False)
+        inp = torch.randint(-1000, 1000, shape, device=flag_gems.device).to(dtype)
 
-    ref_out = torch.roll(ref_inp, shifts, dims)
     res_out = _roll(inp, shifts, dims)
+    ref_inp = (
+        inp.cpu()
+        if flag_gems.vendor_name == "ascend" and dtype == torch.int16
+        else utils.to_reference(inp, False)
+    )
+    ref_out = torch.roll(ref_inp, shifts, dims)
 
     utils.gems_assert_equal(res_out, ref_out)
 
