@@ -147,7 +147,9 @@ def test_profile_runs_only_selected_candidate_case(monkeypatch):
     )
 
     assert executed == [_case_id("core::float16::1")]
-    assert len(materialized) == 1
+    # Warmup and profiler capture intentionally use independent inputs so an
+    # in-place candidate cannot corrupt the state recorded by the profiler.
+    assert len(materialized) == 2
     assert [event[0] for event in events] == [
         "candidate",
         "candidate",
