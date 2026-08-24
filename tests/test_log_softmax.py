@@ -100,10 +100,11 @@ def test_log_softmax_backward_data(shape, dtype, dim):
     ref_in_grad = torch.ops.aten._log_softmax_backward_data(
         ref_grad, ref_out, dim, ref_grad.dtype
     )
-    with flag_gems.use_gems():
-        res_in_grad = torch.ops.aten._log_softmax_backward_data(
-            res_grad, res_out, dim, dtype
-        )
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "log_softmax_backward_data",
+        flag_gems.log_softmax_backward,
+    )
+    res_in_grad = gems_op(res_grad, res_out, dim, dtype)
 
     utils.gems_assert_close(res_in_grad, ref_in_grad, dtype, reduce_dim=shape[dim])
 

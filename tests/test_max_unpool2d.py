@@ -19,6 +19,14 @@ import flag_gems
 
 from . import accuracy_utils as utils
 
+
+def _max_unpool2d(*args, **kwargs):
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "max_unpool2d", flag_gems.max_unpool2d
+    )
+    return gems_op(*args, **kwargs)
+
+
 # Shapes for max_unpool2d: (N, C, H, W) input sizes covering even/odd dims
 MAX_UNPOOL2D_SHAPES = [
     (1, 1, 4, 4),
@@ -81,10 +89,7 @@ def test_max_unpool2d(shape, pool_cfg, dtype):
         ref_pooled, ref_indices.to(torch.int64), output_size
     )
 
-    with flag_gems.use_gems():
-        res_out = torch.ops.aten.max_unpool2d(
-            pooled, indices.to(torch.int64), output_size
-        )
+    res_out = _max_unpool2d(pooled, indices.to(torch.int64), output_size)
 
     utils.gems_assert_close(res_out, ref_out, dtype)
 
@@ -113,9 +118,8 @@ def test_max_unpool2d_non_contiguous(dtype):
         ref_pooled, ref_indices.to(torch.int64), output_size
     )
 
-    with flag_gems.use_gems():
-        res_out = torch.ops.aten.max_unpool2d(
-            pooled_noncontig, indices_noncontig.to(torch.int64), output_size
-        )
+    res_out = _max_unpool2d(
+        pooled_noncontig, indices_noncontig.to(torch.int64), output_size
+    )
 
     utils.gems_assert_close(res_out, ref_out, dtype)

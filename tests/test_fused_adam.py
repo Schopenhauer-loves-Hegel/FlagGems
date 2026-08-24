@@ -145,22 +145,24 @@ def test_fused_adam_(shape, dtype):
         )
 
     # Run gems inplace implementation
-    with flag_gems.use_gems():
-        torch.ops.aten._fused_adam_(
-            [param],
-            [grad],
-            [exp_avg],
-            [exp_avg_sq],
-            [max_exp_avg_sq],
-            [state_step],
-            lr=0.001,
-            beta1=0.9,
-            beta2=0.999,
-            weight_decay=0.0,
-            eps=1e-8,
-            amsgrad=False,
-            maximize=False,
-        )
+    gems_op = flag_gems.testing.resolve_gems_op(
+        "fused_adam_", flag_gems._fused_adam_
+    )
+    gems_op(
+        [param],
+        [grad],
+        [exp_avg],
+        [exp_avg_sq],
+        [max_exp_avg_sq],
+        [state_step],
+        lr=0.001,
+        beta1=0.9,
+        beta2=0.999,
+        weight_decay=0.0,
+        eps=1e-8,
+        amsgrad=False,
+        maximize=False,
+    )
 
     # Compare mutated input
     gems_out = utils.to_reference(param)

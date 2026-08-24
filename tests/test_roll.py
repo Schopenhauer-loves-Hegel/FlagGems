@@ -27,6 +27,11 @@ ROLL_SHIFTS_DIMS = [
 ]
 
 
+def _roll(*args, **kwargs):
+    gems_op = flag_gems.testing.resolve_gems_op("roll", flag_gems.roll)
+    return gems_op(*args, **kwargs)
+
+
 @pytest.mark.roll
 @pytest.mark.parametrize("shape", utils.POINTWISE_SHAPES)
 @pytest.mark.parametrize("dtype", utils.FLOAT_DTYPES + utils.ALL_INT_DTYPES)
@@ -37,7 +42,7 @@ def test_roll_single_dim(shape, dtype, shifts_dims):
     # Adjust dims if it's out of range for this shape
     if dims >= ndim or dims < -ndim:
         # Skip test if dims is out of range for the specified shape
-        return
+        pytest.skip("roll dimension is out of range for this shape")
 
     if dtype in utils.ALL_FLOAT_DTYPES:
         inp = torch.randn(shape, dtype=dtype, device=flag_gems.device)
@@ -46,8 +51,7 @@ def test_roll_single_dim(shape, dtype, shifts_dims):
     ref_inp = utils.to_reference(inp, False)
 
     ref_out = torch.roll(ref_inp, shifts, dims)
-    with flag_gems.use_gems():
-        res_out = torch.roll(inp, shifts, dims)
+    res_out = _roll(inp, shifts, dims)
 
     utils.gems_assert_equal(res_out, ref_out)
 
@@ -70,14 +74,13 @@ def test_roll_multi_dims(shape, dtype, shifts_dims):
     for d in dims:
         if d >= ndim or d < -ndim:
             # Skip the case when dims is out of range for the shape
-            return
+            pytest.skip("roll dimension is out of range for this shape")
 
     inp = torch.randn(shape, dtype=dtype, device=flag_gems.device)
     ref_inp = utils.to_reference(inp, False)
 
     ref_out = torch.roll(ref_inp, shifts, dims)
-    with flag_gems.use_gems():
-        res_out = torch.roll(inp, shifts, dims)
+    res_out = _roll(inp, shifts, dims)
 
     utils.gems_assert_equal(res_out, ref_out)
 
@@ -95,8 +98,7 @@ def test_roll_flatten(shape, dtype, shifts):
 
     # Roll without specifying dims (flatten case)
     ref_out = torch.roll(ref_inp, shifts)
-    with flag_gems.use_gems():
-        res_out = torch.roll(inp, shifts)
+    res_out = _roll(inp, shifts)
 
     utils.gems_assert_equal(res_out, ref_out)
 
@@ -107,7 +109,7 @@ def test_roll_flatten(shape, dtype, shifts):
 def test_roll_with_non_dense_input(shape, dtype):
     if len(shape) < 2:
         # Need at least 2D for non-dense test
-        return
+        pytest.skip("non-dense roll case requires at least two dimensions")
 
     shape_dilated = tuple(item * 2 for item in shape)
     inp = torch.randn(shape_dilated, dtype=dtype, device=flag_gems.device)[::2, ::2]
@@ -117,7 +119,6 @@ def test_roll_with_non_dense_input(shape, dtype):
     dims = 0
 
     ref_out = torch.roll(ref_inp, shifts, dims)
-    with flag_gems.use_gems():
-        res_out = torch.roll(inp, shifts, dims)
+    res_out = _roll(inp, shifts, dims)
 
     utils.gems_assert_equal(res_out, ref_out)
