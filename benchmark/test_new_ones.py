@@ -39,7 +39,7 @@ def test_new_ones():
         op_name="new_ones",
         torch_op=lambda tensor, size: tensor.new_ones(size),
         case_fn=new_ones_case_fn,
-        materialize_fn=materialize_new_ones_case,
+        build_inputs_fn=materialize_new_ones_case,
         dtypes=consts.FLOAT_DTYPES,
     )
     bench.run()

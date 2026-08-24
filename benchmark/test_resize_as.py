@@ -16,7 +16,7 @@ def _resize_as_case_fn(shape, dtype):
     )
 
 
-def _resize_as_materialize_fn(plan, dtype, device):
+def _resize_as_build_inputs_fn(plan, dtype, device):
     shape, target_shape = plan.builder_args
     inp = torch.randn(shape, dtype=dtype, device=device)
     template = torch.randn(target_shape, dtype=dtype, device=device)
@@ -27,7 +27,7 @@ def _resize_as_materialize_fn(plan, dtype, device):
 def test_resize_as():
     bench = base.GenericBenchmark(
         case_fn=_resize_as_case_fn,
-        materialize_fn=_resize_as_materialize_fn,
+        build_inputs_fn=_resize_as_build_inputs_fn,
         op_name="resize_as",
         torch_op=torch.Tensor.resize_as,
         dtypes=consts.FLOAT_DTYPES,
@@ -40,7 +40,7 @@ def test_resize_as():
 def test_resize_as_():
     bench = base.GenericBenchmark(
         case_fn=_resize_as_case_fn,
-        materialize_fn=_resize_as_materialize_fn,
+        build_inputs_fn=_resize_as_build_inputs_fn,
         op_name="resize_as_",
         torch_op=torch.Tensor.resize_as_,
         dtypes=consts.FLOAT_DTYPES,

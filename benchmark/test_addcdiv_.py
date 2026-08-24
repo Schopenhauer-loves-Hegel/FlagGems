@@ -48,7 +48,7 @@ def test_addcdiv_():
         op_name="addcdiv_",
         torch_op=torch.Tensor.addcdiv_,
         case_fn=addcdiv__case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(addcdiv__input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(addcdiv__input_fn),
         dtypes=consts.FLOAT_DTYPES,
         is_inplace=True,
     )

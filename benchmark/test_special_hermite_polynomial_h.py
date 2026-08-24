@@ -40,8 +40,8 @@ def test_special_hermite_polynomial_h():
                     ),
                 )
 
-        def materialize_case(self, case):
-            return self._materialize_from_legacy_shape_case(case)
+        def build_inputs(self, case):
+            return self._build_inputs_from_legacy_shape_case(case)
 
     bench = _HermiteBenchmark(
         op_name="special_hermite_polynomial_h",

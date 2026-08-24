@@ -67,7 +67,7 @@ def _case_fn(shape, dtype):
 def test_index_copy():
     bench = IndexCopyBenchmark(
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_tensor_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_tensor_input_fn),
         op_name="index_copy",
         torch_op=torch.index_copy,
         dtypes=consts.FLOAT_DTYPES,
@@ -82,7 +82,7 @@ def test_index_copy():
 def test_index_copy_():
     bench = IndexCopyBenchmark(
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_tensor_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_tensor_input_fn),
         op_name="index_copy_",
         torch_op=torch.Tensor.index_copy_,
         dtypes=consts.FLOAT_DTYPES,

@@ -28,7 +28,7 @@ def randint_case_fn(shape, dtype):
     )
 
 
-def randint_materialize_fn(plan, dtype, device):
+def randint_build_inputs_fn(plan, dtype, device):
     return 100, plan.builder_args[0], {"dtype": dtype, "device": device}
 
 
@@ -45,7 +45,7 @@ class RandintBenchmark(base.GenericBenchmarkExcluse1D):
 def test_randint():
     bench = RandintBenchmark(
         case_fn=randint_case_fn,
-        materialize_fn=randint_materialize_fn,
+        build_inputs_fn=randint_build_inputs_fn,
         op_name="randint",
         torch_op=torch.randint,
         dtypes=consts.INT_DTYPES,

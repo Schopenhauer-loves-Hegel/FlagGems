@@ -65,7 +65,7 @@ def test_unbind_copy():
         op_name="unbind_copy",
         torch_op=torch.unbind_copy,
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
         dtypes=consts.FLOAT_DTYPES,
     )
     bench.run()

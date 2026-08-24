@@ -31,7 +31,7 @@ class LogsumexpBenchmark(base.Benchmark):
 
     def get_input_iter(self, cur_dtype):
         for case in self.get_case_iter(cur_dtype):
-            yield self.materialize_case(case)
+            yield self.build_inputs(case)
 
     def supports_cases(self) -> bool:
         return type(self).get_input_iter is LogsumexpBenchmark.get_input_iter
@@ -48,7 +48,7 @@ class LogsumexpBenchmark(base.Benchmark):
                 ),
             )
 
-    def materialize_case(self, case):
+    def build_inputs(self, case):
         plan = case.builder_args[0]
         inp = torch.randn(
             plan.builder_args[0], dtype=case.dtype, device=self.device

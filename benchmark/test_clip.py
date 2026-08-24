@@ -39,7 +39,7 @@ def _case_fn(shape, dtype):
         )
 
 
-def _materialize_fn(plan, dtype, device):
+def _build_inputs_fn(plan, dtype, device):
     shape, minimum, maximum = plan.builder_args
     inp = utils.generate_tensor_input(shape, dtype, device)
     return inp, minimum, maximum
@@ -49,7 +49,7 @@ def _materialize_fn(plan, dtype, device):
 def test_clip():
     bench = base.GenericBenchmark(
         case_fn=_case_fn,
-        materialize_fn=_materialize_fn,
+        build_inputs_fn=_build_inputs_fn,
         op_name="clip",
         torch_op=torch.clip,
         dtypes=consts.FLOAT_DTYPES,
@@ -61,7 +61,7 @@ def test_clip():
 def test_clip_inplace():
     bench = base.GenericBenchmark(
         case_fn=_case_fn,
-        materialize_fn=_materialize_fn,
+        build_inputs_fn=_build_inputs_fn,
         op_name="clip_",
         torch_op=torch.clip_,
         dtypes=consts.FLOAT_DTYPES,

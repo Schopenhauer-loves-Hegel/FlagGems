@@ -75,7 +75,7 @@ def test_narrow_copy_perf():
         op_name="narrow_copy",
         torch_op=torch.narrow_copy,
         case_fn=narrow_copy_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(narrow_copy_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(narrow_copy_input_fn),
         dtypes=consts.FLOAT_DTYPES,
         get_gbps=narrow_copy_gbps,
     )

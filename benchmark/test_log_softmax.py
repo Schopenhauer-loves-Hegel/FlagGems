@@ -82,7 +82,7 @@ def test_log_softmax_backward_data():
     bench = base.GenericBenchmark2DOnly(
         op_name="log_softmax_backward_data",
         case_fn=log_softmax_backward_data_case_fn,
-        materialize_fn=materialize_log_softmax_backward_data_case,
+        build_inputs_fn=materialize_log_softmax_backward_data_case,
         torch_op=torch.ops.aten._log_softmax_backward_data,
         dtypes=consts.FLOAT_DTYPES,
     )

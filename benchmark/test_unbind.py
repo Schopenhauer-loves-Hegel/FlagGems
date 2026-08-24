@@ -23,7 +23,7 @@ class UnbindBenchmark(base.Benchmark):
 
     def get_input_iter(self, dtype):
         for case in self.get_case_iter(dtype):
-            yield self.materialize_case(case)
+            yield self.build_inputs(case)
 
     def get_case_iter(self, dtype):
         for ordinal, shape in enumerate(self.shapes):
@@ -38,7 +38,7 @@ class UnbindBenchmark(base.Benchmark):
                 ),
             )
 
-    def materialize_case(self, case):
+    def build_inputs(self, case):
         shape, dim = case.builder_args[0].builder_args
         inp = torch.randn(shape, dtype=case.dtype, device=self.device)
         return inp, dim

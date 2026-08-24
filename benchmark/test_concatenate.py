@@ -29,7 +29,7 @@ def _case_fn(shape, dtype):
     )
 
 
-def _materialize_fn(plan, dtype, device):
+def _build_inputs_fn(plan, dtype, device):
     shape = plan.builder_args[0]
     inp1 = utils.generate_tensor_input(shape, dtype, device)
     inp2 = utils.generate_tensor_input(shape, dtype, device)
@@ -46,7 +46,7 @@ def test_concatenate():
         op_name="concatenate",
         torch_op=torch.concatenate,
         case_fn=_case_fn,
-        materialize_fn=_materialize_fn,
+        build_inputs_fn=_build_inputs_fn,
         dtypes=consts.FLOAT_DTYPES + consts.INT_DTYPES,
     )
     bench.run()

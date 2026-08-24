@@ -37,7 +37,7 @@ class EinsumBenchmark(base.Benchmark):
 
     def get_input_iter(self, dtype) -> Generator:
         for case in self.get_case_iter(dtype):
-            yield self.materialize_case(case)
+            yield self.build_inputs(case)
 
     def supports_cases(self) -> bool:
         return type(self).get_input_iter is EinsumBenchmark.get_input_iter
@@ -59,7 +59,7 @@ class EinsumBenchmark(base.Benchmark):
                 ),
             )
 
-    def materialize_case(self, case):
+    def build_inputs(self, case):
         shape_a, shape_b = case.builder_args[0].builder_args
         inp1 = torch.randn(shape_a, dtype=case.dtype, device=self.device)
         inp2 = torch.randn(shape_b, dtype=case.dtype, device=self.device)
@@ -150,7 +150,7 @@ def test_einsum_bmm():
 def test_einsum_dot():
     bench = EinsumGenericBenchmark(
         case_fn=_case_fn_factory(lambda shape: [shape, shape], "i,i->"),
-        materialize_fn=base.materialize_from_generic_input_fn(dot_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(dot_input_fn),
         op_name="einsum",
         torch_op=lambda A, B: torch.einsum("i,i->", A, B),
         dtypes=consts.FLOAT_DTYPES,
@@ -165,7 +165,7 @@ def test_einsum_outer():
         case_fn=_case_fn_factory(
             lambda shape: [(shape[0],), (shape[1],)], "i,j->ij"
         ),
-        materialize_fn=base.materialize_from_generic_input_fn(outer_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(outer_input_fn),
         op_name="einsum",
         torch_op=lambda A, B: torch.einsum("i,j->ij", A, B),
         dtypes=consts.FLOAT_DTYPES,
@@ -178,7 +178,7 @@ def test_einsum_outer():
 def test_einsum_trace():
     bench = EinsumGenericBenchmark(
         case_fn=_case_fn_factory(lambda shape: [shape], "ii->"),
-        materialize_fn=base.materialize_from_generic_input_fn(unary_2d_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(unary_2d_input_fn),
         op_name="einsum",
         torch_op=lambda A: torch.einsum("ii->", A),
         dtypes=consts.FLOAT_DTYPES,
@@ -191,7 +191,7 @@ def test_einsum_trace():
 def test_einsum_diagonal():
     bench = EinsumGenericBenchmark(
         case_fn=_case_fn_factory(lambda shape: [shape], "ii->i"),
-        materialize_fn=base.materialize_from_generic_input_fn(unary_2d_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(unary_2d_input_fn),
         op_name="einsum",
         torch_op=lambda A: torch.einsum("ii->i", A),
         dtypes=consts.FLOAT_DTYPES,
@@ -204,7 +204,7 @@ def test_einsum_diagonal():
 def test_einsum_transpose():
     bench = EinsumGenericBenchmark(
         case_fn=_case_fn_factory(lambda shape: [shape], "ij->ji"),
-        materialize_fn=base.materialize_from_generic_input_fn(unary_2d_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(unary_2d_input_fn),
         op_name="einsum",
         torch_op=lambda A: torch.einsum("ij->ji", A),
         dtypes=consts.FLOAT_DTYPES,
@@ -217,7 +217,7 @@ def test_einsum_transpose():
 def test_einsum_sum_all():
     bench = EinsumGenericBenchmark(
         case_fn=_case_fn_factory(lambda shape: [shape], "ijk->"),
-        materialize_fn=base.materialize_from_generic_input_fn(unary_3d_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(unary_3d_input_fn),
         op_name="einsum",
         torch_op=lambda A: torch.einsum("ijk->", A),
         dtypes=consts.FLOAT_DTYPES,
@@ -230,7 +230,7 @@ def test_einsum_sum_all():
 def test_einsum_sum_dim():
     bench = EinsumGenericBenchmark(
         case_fn=_case_fn_factory(lambda shape: [shape], "ijk->j"),
-        materialize_fn=base.materialize_from_generic_input_fn(unary_3d_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(unary_3d_input_fn),
         op_name="einsum",
         torch_op=lambda A: torch.einsum("ijk->j", A),
         dtypes=consts.FLOAT_DTYPES,
@@ -249,7 +249,7 @@ def test_einsum_ellipsis():
             ],
             "...ij,...jk->...ik",
         ),
-        materialize_fn=base.materialize_from_generic_input_fn(ellipsis_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(ellipsis_input_fn),
         op_name="einsum",
         torch_op=lambda A, B: torch.einsum("...ij,...jk->...ik", A, B),
         dtypes=consts.FLOAT_DTYPES,

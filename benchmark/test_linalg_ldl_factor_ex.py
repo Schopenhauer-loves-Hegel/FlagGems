@@ -40,7 +40,7 @@ def test_linalg_ldl_factor_ex():
         op_name="linalg_ldl_factor_ex",
         torch_op=torch.linalg.ldl_factor_ex,
         case_fn=linalg_ldl_factor_ex_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             linalg_ldl_factor_ex_input_fn
         ),
         # PyTorch linalg_ldl_factor_ex only supports float32 on CUDA.

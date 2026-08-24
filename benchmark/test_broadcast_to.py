@@ -49,8 +49,8 @@ class BroadcastToBenchmark(base.Benchmark):
                 ),
             )
 
-    def materialize_case(self, case):
-        return self._materialize_from_legacy_shape_case(case)
+    def build_inputs(self, case):
+        return self._build_inputs_from_legacy_shape_case(case)
 
 
 @pytest.mark.broadcast_to

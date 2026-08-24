@@ -56,7 +56,7 @@ def fractional_max_pool2d_input_fn(shape, dtype, device):
 def test_fractional_max_pool2d():
     bench = FractionalMaxPool2dBenchmark(
         case_fn=fractional_max_pool2d_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             fractional_max_pool2d_input_fn
         ),
         op_name="fractional_max_pool2d",
@@ -96,7 +96,7 @@ def torch_fractional_max_pool2d_backward_wrapper(grad_output, input, **kwargs):
 def test_fractional_max_pool2d_backward():
     bench = FractionalMaxPool2dBenchmark(
         case_fn=fractional_max_pool2d_backward_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             fractional_max_pool2d_backward_input_fn
         ),
         op_name="fractional_max_pool2d_backward",

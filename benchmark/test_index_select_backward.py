@@ -66,7 +66,7 @@ def test_index_select_backward():
         op_name="index_select_backward",
         torch_op=torch.ops.aten.index_select_backward,
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
         dtypes=consts.FLOAT_DTYPES,
         get_gbps=_get_gbps,
     )

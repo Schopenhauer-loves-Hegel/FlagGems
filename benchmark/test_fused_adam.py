@@ -118,7 +118,7 @@ def test_fused_adam():
 
     bench = FusedAdamBenchmark(
         case_fn=fused_adam_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(fused_adam_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(fused_adam_input_fn),
         op_name="fused_adam",
         torch_op=torch_op,
         # _fused_adam only supports float32 for optimizer state precision
@@ -150,7 +150,7 @@ def test_fused_adam_():
 
     bench = FusedAdamBenchmark(
         case_fn=fused_adam_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(fused_adam_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(fused_adam_input_fn),
         op_name="fused_adam_",
         torch_op=torch_op,
         # _fused_adam only supports float32 for optimizer state precision

@@ -16,8 +16,19 @@ import pytest
 import torch
 
 import flag_gems
+from flag_gems.utils import shape_utils
 
 from . import base, consts
+
+
+class ScatterReduceBenchmark(base.GenericBenchmark2DOnly):
+    def get_gbps(self, args, latency):
+        inp, _, index, src = args[:4]
+        io_amount = sum(
+            shape_utils.size_in_bytes(item)
+            for item in (inp, index, src, inp)
+        )
+        return io_amount * 1e-9 / (latency * 1e-3)
 
 
 def _input_fn_factory(reduce):
@@ -44,16 +55,16 @@ def _case_fn_factory(reduce):
     return inner
 
 
-@pytest.mark.scatter_reduce_two_
+@pytest.mark.scatter_reduce_
 @pytest.mark.skipif(
     flag_gems.vendor_name == "tsingmicro", reason="Issue #4131: not working"
 )
 def test_scatter_reduce_two_inplace_sum():
-    bench = base.GenericBenchmark2DOnly(
+    bench = ScatterReduceBenchmark(
         op_name="scatter_reduce_",
         torch_op=torch.Tensor.scatter_reduce_,
         case_fn=_case_fn_factory("sum"),
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             _input_fn_factory("sum")
         ),
         dtypes=consts.FLOAT_DTYPES,
@@ -62,16 +73,16 @@ def test_scatter_reduce_two_inplace_sum():
     bench.run()
 
 
-@pytest.mark.scatter_reduce_two_
+@pytest.mark.scatter_reduce_
 @pytest.mark.skipif(
     flag_gems.vendor_name == "tsingmicro", reason="Issue #4131: not working"
 )
 def test_scatter_reduce_two_inplace_amax():
-    bench = base.GenericBenchmark2DOnly(
+    bench = ScatterReduceBenchmark(
         op_name="scatter_reduce_",
         torch_op=torch.Tensor.scatter_reduce_,
         case_fn=_case_fn_factory("amax"),
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             _input_fn_factory("amax")
         ),
         dtypes=consts.FLOAT_DTYPES,
@@ -80,16 +91,16 @@ def test_scatter_reduce_two_inplace_amax():
     bench.run()
 
 
-@pytest.mark.scatter_reduce_two_
+@pytest.mark.scatter_reduce_
 @pytest.mark.skipif(
     flag_gems.vendor_name == "tsingmicro", reason="Issue #4131: not working"
 )
 def test_scatter_reduce_two_inplace_amin():
-    bench = base.GenericBenchmark2DOnly(
+    bench = ScatterReduceBenchmark(
         op_name="scatter_reduce_",
         torch_op=torch.Tensor.scatter_reduce_,
         case_fn=_case_fn_factory("amin"),
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             _input_fn_factory("amin")
         ),
         dtypes=consts.FLOAT_DTYPES,
@@ -98,16 +109,16 @@ def test_scatter_reduce_two_inplace_amin():
     bench.run()
 
 
-@pytest.mark.scatter_reduce_two_
+@pytest.mark.scatter_reduce_
 @pytest.mark.skipif(
     flag_gems.vendor_name == "tsingmicro", reason="Issue #4131: not working"
 )
 def test_scatter_reduce_two_inplace_mean():
-    bench = base.GenericBenchmark2DOnly(
+    bench = ScatterReduceBenchmark(
         op_name="scatter_reduce_",
         torch_op=torch.Tensor.scatter_reduce_,
         case_fn=_case_fn_factory("mean"),
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             _input_fn_factory("mean")
         ),
         dtypes=consts.FLOAT_DTYPES,

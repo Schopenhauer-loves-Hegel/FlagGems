@@ -27,7 +27,7 @@ def _functional_sym_constrain_range_case_fn(shape, dtype):
     )
 
 
-def _functional_sym_constrain_range_materialize_fn(plan, dtype, device):
+def _functional_sym_constrain_range_build_inputs_fn(plan, dtype, device):
     dep_token = base.generate_tensor_input(plan.builder_args[0], dtype, device)
     return 5, 1, 10, dep_token
 
@@ -39,6 +39,6 @@ def test_functional_sym_constrain_range():
         torch_op=torch.ops.aten._functional_sym_constrain_range,
         dtypes=consts.FLOAT_DTYPES,
         case_fn=_functional_sym_constrain_range_case_fn,
-        materialize_fn=_functional_sym_constrain_range_materialize_fn,
+        build_inputs_fn=_functional_sym_constrain_range_build_inputs_fn,
     )
     bench.run()

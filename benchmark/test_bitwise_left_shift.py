@@ -28,7 +28,7 @@ class BitwiseLeftShiftBenchmark(base.Benchmark):
 
     def get_input_iter(self, dtype) -> Generator:
         for case in self.get_case_iter(dtype):
-            yield self.materialize_case(case)
+            yield self.build_inputs(case)
 
     def get_case_iter(self, dtype) -> Generator:
         for ordinal, shape in enumerate(self.shapes):
@@ -42,7 +42,7 @@ class BitwiseLeftShiftBenchmark(base.Benchmark):
                 ),
             )
 
-    def materialize_case(self, case):
+    def build_inputs(self, case):
         shape = case.builder_args[0].builder_args[0]
         inp1 = utils.generate_tensor_input(shape, case.dtype, self.device)
         shift_amount = torch.randint(

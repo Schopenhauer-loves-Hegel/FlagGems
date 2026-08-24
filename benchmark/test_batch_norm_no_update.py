@@ -72,7 +72,7 @@ def torch_batch_norm_no_update(
 def test_batch_norm_no_update():
     bench = NormBenchmark(
         case_fn=batch_norm_no_update_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             batch_norm_no_update_input_fn
         ),
         op_name="batch_norm_no_update",

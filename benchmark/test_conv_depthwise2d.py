@@ -94,7 +94,7 @@ def test_conv_depthwise2d():
     bench = ConvDepthwise2DBenchmark(
         op_name="conv_depthwise2d",
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
         torch_op=torch.ops.aten._conv_depthwise2d,
         gems_op=flag_gems._conv_depthwise2d,
         dtypes=consts.FLOAT_DTYPES,

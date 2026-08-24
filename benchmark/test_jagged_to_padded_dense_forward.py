@@ -36,7 +36,7 @@ class JaggedToPaddedDenseForwardBenchmark(base.Benchmark):
 
     def get_input_iter(self, cur_dtype):
         for case in self.get_case_iter(cur_dtype):
-            yield self.materialize_case(case)
+            yield self.build_inputs(case)
 
     def get_case_iter(self, cur_dtype):
         for ordinal, (batch_size, max_length) in enumerate(self.shapes):
@@ -58,7 +58,7 @@ class JaggedToPaddedDenseForwardBenchmark(base.Benchmark):
                 ),
             )
 
-    def materialize_case(self, case):
+    def build_inputs(self, case):
         seq_lengths, max_length = case.builder_args[0].builder_args
 
         # Create offsets tensor (cumulative)

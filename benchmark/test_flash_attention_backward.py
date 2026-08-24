@@ -777,7 +777,7 @@ def test_perf_scaled_dot_product_cudnn_attention_backward():
     bench = CudnnAttentionBackwardBenchmark(
         op_name="scaled_dot_product_cudnn_attention_backward",
         case_fn=cudnn_attn_bwd_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(cudnn_attn_bwd_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(cudnn_attn_bwd_input_fn),
         torch_op=_cudnn_attn_bwd_aten,
         dtypes=[torch.float16, torch.bfloat16],
     )

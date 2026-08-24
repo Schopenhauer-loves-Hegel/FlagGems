@@ -76,7 +76,7 @@ class ConvTranspose1dBenchmark(base.GenericBenchmark):
                 ),
             )
 
-    def materialize_case(self, case):
+    def build_inputs(self, case):
         shape, _ = case.builder_args[0].builder_args
         return next(conv_transpose1d_input_fn(shape, case.dtype, self.device))
 

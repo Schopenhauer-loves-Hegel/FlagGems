@@ -199,14 +199,14 @@ def test_generic_two_stage_cases_do_not_materialize_during_listing(monkeypatch):
             builder_args=(shape,),
         )
 
-    def materialize_fn(plan, dtype, device):
+    def build_inputs_fn(plan, dtype, device):
         materialized.append((plan, dtype, device))
         return plan.builder_args[0], plan.params["dim"]
 
     benchmark = base.GenericBenchmark(
         op_name="generic_case_api_test",
         case_fn=case_fn,
-        materialize_fn=materialize_fn,
+        build_inputs_fn=build_inputs_fn,
         torch_op=lambda *args: args,
         dtypes=[torch.float16],
     )
@@ -254,7 +254,7 @@ def test_generic_two_stage_full_run_preserves_planned_case_order(monkeypatch):
                 builder_args=(shape, transposed),
             )
 
-    def materialize_fn(plan, dtype, device):
+    def build_inputs_fn(plan, dtype, device):
         del dtype, device
         materialized.append(plan.builder_args)
         return plan.builder_args
@@ -262,7 +262,7 @@ def test_generic_two_stage_full_run_preserves_planned_case_order(monkeypatch):
     benchmark = base.GenericBenchmark(
         op_name="generic_case_order_test",
         case_fn=case_fn,
-        materialize_fn=materialize_fn,
+        build_inputs_fn=build_inputs_fn,
         torch_op=lambda *args: args,
         dtypes=[torch.float16],
     )
@@ -388,7 +388,7 @@ def test_custom_family_loop_is_supported_after_two_stage_migration(monkeypatch):
                 ),
             )
 
-        def materialize_case(self, case):
+        def build_inputs(self, case):
             materialized.append(case.case_id)
             return case.builder_args[0].builder_args
 

@@ -59,7 +59,7 @@ def bernoulli_case_fn(shape, dtype):
 def test_bernoulli():
     bench = base.GenericBenchmark(
         case_fn=bernoulli_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(bernoulli_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(bernoulli_input_fn),
         op_name="bernoulli",
         torch_op=torch.bernoulli,
         dtypes=consts.FLOAT_DTYPES,

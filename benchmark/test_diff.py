@@ -61,7 +61,7 @@ def test_diff():
         op_name="diff",
         torch_op=torch.diff,
         case_fn=_case_fn(1),
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
         dtypes=consts.FLOAT_DTYPES,
     )
     bench.run()
@@ -76,7 +76,7 @@ def test_diff_n2():
         op_name="diff",
         torch_op=functools.partial(torch.diff, n=2),
         case_fn=_case_fn(2),
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
         dtypes=consts.FLOAT_DTYPES,
     )
     bench.run()

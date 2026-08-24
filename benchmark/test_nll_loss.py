@@ -67,7 +67,7 @@ def test_nll_loss_forward():
     bench = base.GenericBenchmark2DOnly(
         op_name="nll_loss_forward",
         case_fn=nll_loss_case_fn,
-        materialize_fn=materialize_nll_loss_case,
+        build_inputs_fn=materialize_nll_loss_case,
         torch_op=torch.nn.functional.nll_loss,
         dtypes=consts.FLOAT_DTYPES,
     )
@@ -79,7 +79,7 @@ def test_nll_loss_backward():
     bench = base.GenericBenchmark2DOnly(
         op_name="nll_loss_backward",
         case_fn=nll_loss_case_fn,
-        materialize_fn=materialize_nll_loss_case,
+        build_inputs_fn=materialize_nll_loss_case,
         torch_op=torch.nn.functional.nll_loss,
         dtypes=consts.FLOAT_DTYPES,
         is_backward=True,

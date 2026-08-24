@@ -384,25 +384,33 @@ class Benchmark:
 
     def _run_candidate_input(
         self,
-        input,
+        warmup_input,
+        capture_input,
         *,
         warmup: int = 0,
         iterations: int = 1,
         profile: bool = False,
         case_id: Optional[str] = None,
     ):
-        args, kwargs = self.unpack_to_args_kwargs(input)
         context, op = self._candidate_context_and_op(case_id)
         with context:
-            fn, _ = self._make_invocation(op, *args, **kwargs)
-            for _ in range(warmup):
-                fn()
-            torch_device_fn.synchronize()
+            # Warmup phase: use a separate input so in-place ops do not corrupt
+            # the tensor state that the capture phase will observe.
+            if warmup > 0:
+                warmup_args, warmup_kwargs = self.unpack_to_args_kwargs(warmup_input)
+                warmup_fn, _ = self._make_invocation(op, *warmup_args, **warmup_kwargs)
+                for _ in range(warmup):
+                    warmup_fn()
+                torch_device_fn.synchronize()
+
+            # Capture phase: use the independent capture input.
+            capture_args, capture_kwargs = self.unpack_to_args_kwargs(capture_input)
+            capture_fn, _ = self._make_invocation(op, *capture_args, **capture_kwargs)
             if profile:
                 self._external_profiler_start()
             try:
                 for _ in range(iterations):
-                    fn()
+                    capture_fn()
                 torch_device_fn.synchronize()
             finally:
                 if profile:
@@ -433,7 +441,7 @@ class Benchmark:
     def supports_cases(self) -> bool:
         return (
             type(self).get_case_iter is not Benchmark.get_case_iter
-            and type(self).materialize_case is not Benchmark.materialize_case
+            and type(self).build_inputs is not Benchmark.build_inputs
         )
 
     def _case_id(self, dtype, ordinal: int) -> str:
@@ -464,13 +472,13 @@ class Benchmark:
             f"{type(self).__name__} does not provide benchmark cases."
         )
 
-    def materialize_case(self, case: BenchmarkCaseSpec):
+    def build_inputs(self, case: BenchmarkCaseSpec):
         """Build the exact legacy input tuple for one selected case."""
         raise NotImplementedError(
             f"{type(self).__name__} cannot materialize benchmark case specs."
         )
 
-    def _materialize_from_legacy_shape_case(self, case: BenchmarkCaseSpec):
+    def _build_inputs_from_legacy_shape_case(self, case: BenchmarkCaseSpec):
         """Use an existing one-shape input loop as the materialization stage.
 
         Custom benchmark migrations may retain their proven tensor-construction
@@ -647,7 +655,7 @@ class Benchmark:
                 ):
                     continue
                 try:
-                    input = self.materialize_case(case)
+                    input = self.build_inputs(case)
                 except Exception as e:
                     print(
                         f"\033[31mFAILED\033[0m: Operator={self.op_name} "
@@ -684,21 +692,41 @@ class Benchmark:
         for case in cases:
             if not select_all and case.case_id not in selected:
                 continue
+            # --- input generation ---
             try:
-                input = self.materialize_case(case)
+                warmup_input = self.build_inputs(case)
+                capture_input = self.build_inputs(case) if profile else warmup_input
+            except Exception as e:
+                msg = (
+                    f"input generation failed for case_id={case.case_id}: {e}"
+                )
+                print(f"\033[31mFAILED\033[0m [materialize]: Operator={self.op_name} {msg}")
+                pytest.fail(msg)
+
+            # --- candidate execution ---
+            try:
                 self._run_candidate_input(
-                    input,
+                    warmup_input,
+                    capture_input,
                     warmup=warmup,
                     iterations=iterations,
                     profile=profile,
                     case_id=case.case_id,
                 )
             except Exception as e:
-                print(
-                    f"\033[31mFAILED\033[0m: Operator={self.op_name} "
-                    f"case_id={case.case_id} err=<<<{e}>>>"
+                import triton
+                if isinstance(e, triton.compiler.errors.CompilationError):
+                    stage = "compile"
+                elif isinstance(e, (RuntimeError, torch.cuda.OutOfMemoryError)):
+                    stage = "runtime"
+                else:
+                    stage = type(e).__name__
+                msg = (
+                    f"candidate {stage} error for case_id={case.case_id} "
+                    f"shape={case.shape} dtype={case.dtype} params={case.params}: {e}"
                 )
-                pytest.fail(str(e))
+                print(f"\033[31mFAILED\033[0m [{stage}]: Operator={self.op_name} {msg}")
+                pytest.fail(msg)
             executed.append(case.case_id)
         Config.executed_case_ids.update(executed)
         return executed
@@ -780,26 +808,26 @@ class GenericBenchmark(Benchmark):
         *args,
         input_fn=None,
         case_fn=None,
-        materialize_fn=None,
+        build_inputs_fn=None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        if input_fn is not None and (case_fn is not None or materialize_fn is not None):
+        if input_fn is not None and (case_fn is not None or build_inputs_fn is not None):
             raise ValueError(
                 "GenericBenchmark accepts either legacy input_fn or the "
-                "case_fn/materialize_fn pair, not both."
+                "case_fn/build_inputs_fn pair, not both."
             )
-        if (case_fn is None) != (materialize_fn is None):
+        if (case_fn is None) != (build_inputs_fn is None):
             raise ValueError(
-                "GenericBenchmark requires case_fn and materialize_fn together."
+                "GenericBenchmark requires case_fn and build_inputs_fn together."
             )
         if input_fn is None and case_fn is None:
             raise ValueError(
-                "GenericBenchmark requires input_fn or case_fn/materialize_fn."
+                "GenericBenchmark requires input_fn or case_fn/build_inputs_fn."
             )
         self.input_fn = input_fn
         self.case_fn = case_fn
-        self.materialize_fn = materialize_fn
+        self.build_inputs_fn = build_inputs_fn
 
     def set_more_shapes(self):
         more_shapes_1d = [
@@ -812,7 +840,7 @@ class GenericBenchmark(Benchmark):
     def get_input_iter(self, dtype) -> Generator:
         if self.case_fn is not None:
             for case in self.get_case_iter(dtype):
-                yield self.materialize_case(case)
+                yield self.build_inputs(case)
             return
         for shape in self.shapes:
             yield from self.input_fn(shape, dtype, self.device)
@@ -820,7 +848,7 @@ class GenericBenchmark(Benchmark):
     def supports_cases(self) -> bool:
         if (
             type(self).get_case_iter is not GenericBenchmark.get_case_iter
-            and type(self).materialize_case is not GenericBenchmark.materialize_case
+            and type(self).build_inputs is not GenericBenchmark.build_inputs
         ):
             return True
         return (
@@ -839,9 +867,9 @@ class GenericBenchmark(Benchmark):
                 yield self._case_from_plan(dtype, ordinal, plan)
                 ordinal += 1
 
-    def materialize_case(self, case: BenchmarkCaseSpec):
+    def build_inputs(self, case: BenchmarkCaseSpec):
         plan = case.builder_args[0]
-        return self.materialize_fn(plan, case.dtype, self.device)
+        return self.build_inputs_fn(plan, case.dtype, self.device)
 
 
 class GenericBenchmarkFilterShapes(GenericBenchmark):
@@ -920,13 +948,13 @@ class UnaryReductionBenchmark(Benchmark):
 
     def get_input_iter(self, dtype) -> Generator:
         for case in self.get_case_iter(dtype):
-            yield self.materialize_case(case)
+            yield self.build_inputs(case)
 
     def supports_cases(self) -> bool:
         if (
             type(self).get_case_iter is not UnaryReductionBenchmark.get_case_iter
-            and type(self).materialize_case
-            is not UnaryReductionBenchmark.materialize_case
+            and type(self).build_inputs
+            is not UnaryReductionBenchmark.build_inputs
         ):
             return True
         return type(self).get_input_iter is UnaryReductionBenchmark.get_input_iter
@@ -945,7 +973,7 @@ class UnaryReductionBenchmark(Benchmark):
                 ),
             )
 
-    def materialize_case(self, case: BenchmarkCaseSpec):
+    def build_inputs(self, case: BenchmarkCaseSpec):
         plan = case.builder_args[0]
         shape, dim = plan.builder_args
         inp = generate_tensor_input(shape, case.dtype, self.device)
@@ -984,13 +1012,13 @@ class TexGluBenchmark(Benchmark):
 class TexGluForwardBenchmark(TexGluBenchmark):
     def get_input_iter(self, dtype):
         for case in self.get_case_iter(dtype):
-            yield self.materialize_case(case)
+            yield self.build_inputs(case)
 
     def supports_cases(self) -> bool:
         if (
             type(self).get_case_iter is not TexGluForwardBenchmark.get_case_iter
-            and type(self).materialize_case
-            is not TexGluForwardBenchmark.materialize_case
+            and type(self).build_inputs
+            is not TexGluForwardBenchmark.build_inputs
         ):
             return True
         return type(self).get_input_iter is TexGluForwardBenchmark.get_input_iter
@@ -1007,7 +1035,7 @@ class TexGluForwardBenchmark(TexGluBenchmark):
                 ),
             )
 
-    def materialize_case(self, case: BenchmarkCaseSpec):
+    def build_inputs(self, case: BenchmarkCaseSpec):
         plan = case.builder_args[0]
         x = generate_tensor_input(plan.builder_args[0], case.dtype, self.device)
         return x, plan.params["quantizer"]
@@ -1021,13 +1049,13 @@ class TexGluForwardBenchmark(TexGluBenchmark):
 class TexGluBackwardBenchmark(TexGluBenchmark):
     def get_input_iter(self, dtype):
         for case in self.get_case_iter(dtype):
-            yield self.materialize_case(case)
+            yield self.build_inputs(case)
 
     def supports_cases(self) -> bool:
         if (
             type(self).get_case_iter is not TexGluBackwardBenchmark.get_case_iter
-            and type(self).materialize_case
-            is not TexGluBackwardBenchmark.materialize_case
+            and type(self).build_inputs
+            is not TexGluBackwardBenchmark.build_inputs
         ):
             return True
         return type(self).get_input_iter is TexGluBackwardBenchmark.get_input_iter
@@ -1046,7 +1074,7 @@ class TexGluBackwardBenchmark(TexGluBenchmark):
                 ),
             )
 
-    def materialize_case(self, case: BenchmarkCaseSpec):
+    def build_inputs(self, case: BenchmarkCaseSpec):
         plan = case.builder_args[0]
         shape, grad_out_shape = plan.builder_args
         inp = generate_tensor_input(shape, case.dtype, self.device)
@@ -1075,14 +1103,14 @@ class BlasBenchmark(Benchmark):
 
     def get_input_iter(self, dtype) -> Generator:
         for case in self.get_case_iter(dtype):
-            yield self.materialize_case(case)
+            yield self.build_inputs(case)
 
     def supports_cases(self) -> bool:
         # Subclasses that replace the standard BLAS case loop must provide
         # their own case enumeration before they can support selection.
         if (
             type(self).get_case_iter is not BlasBenchmark.get_case_iter
-            and type(self).materialize_case is not BlasBenchmark.materialize_case
+            and type(self).build_inputs is not BlasBenchmark.build_inputs
         ):
             return True
         return type(self).get_input_iter is BlasBenchmark.get_input_iter
@@ -1102,7 +1130,7 @@ class BlasBenchmark(Benchmark):
                 builder_args=(b, m, n, k, dtype, self.device, b_column_major),
             )
 
-    def materialize_case(self, case: BenchmarkCaseSpec):
+    def build_inputs(self, case: BenchmarkCaseSpec):
         input_iter = iter(self.input_fn(*case.builder_args))
         try:
             input = next(input_iter)
@@ -1169,13 +1197,13 @@ class BinaryPointwiseBenchmark(Benchmark):
 
     def get_input_iter(self, dtype) -> Generator:
         for case in self.get_case_iter(dtype):
-            yield self.materialize_case(case)
+            yield self.build_inputs(case)
 
     def supports_cases(self) -> bool:
         if (
             type(self).get_case_iter is not BinaryPointwiseBenchmark.get_case_iter
-            and type(self).materialize_case
-            is not BinaryPointwiseBenchmark.materialize_case
+            and type(self).build_inputs
+            is not BinaryPointwiseBenchmark.build_inputs
         ):
             return True
         return type(self).get_input_iter is BinaryPointwiseBenchmark.get_input_iter
@@ -1191,7 +1219,7 @@ class BinaryPointwiseBenchmark(Benchmark):
                 ),
             )
 
-    def materialize_case(self, case: BenchmarkCaseSpec):
+    def build_inputs(self, case: BenchmarkCaseSpec):
         shape = case.builder_args[0].builder_args[0]
         inp1 = generate_tensor_input(shape, case.dtype, self.device)
         inp2 = generate_tensor_input(shape, case.dtype, self.device)
@@ -1217,14 +1245,14 @@ class ScalarBinaryPointwiseBenchmark(Benchmark):
 
     def get_input_iter(self, dtype) -> Generator:
         for case in self.get_case_iter(dtype):
-            yield self.materialize_case(case)
+            yield self.build_inputs(case)
 
     def supports_cases(self) -> bool:
         if (
             type(self).get_case_iter
             is not ScalarBinaryPointwiseBenchmark.get_case_iter
-            and type(self).materialize_case
-            is not ScalarBinaryPointwiseBenchmark.materialize_case
+            and type(self).build_inputs
+            is not ScalarBinaryPointwiseBenchmark.build_inputs
         ):
             return True
         return (
@@ -1244,7 +1272,7 @@ class ScalarBinaryPointwiseBenchmark(Benchmark):
                 ),
             )
 
-    def materialize_case(self, case: BenchmarkCaseSpec):
+    def build_inputs(self, case: BenchmarkCaseSpec):
         shape = case.builder_args[0].builder_args[0]
         inp = generate_tensor_input(shape, case.dtype, self.device)
         return 0.001, inp
@@ -1268,13 +1296,13 @@ class UnaryPointwiseBenchmark(Benchmark):
 
     def get_input_iter(self, dtype) -> Generator:
         for case in self.get_case_iter(dtype):
-            yield self.materialize_case(case)
+            yield self.build_inputs(case)
 
     def supports_cases(self) -> bool:
         if (
             type(self).get_case_iter is not UnaryPointwiseBenchmark.get_case_iter
-            and type(self).materialize_case
-            is not UnaryPointwiseBenchmark.materialize_case
+            and type(self).build_inputs
+            is not UnaryPointwiseBenchmark.build_inputs
         ):
             return True
         return type(self).get_input_iter is UnaryPointwiseBenchmark.get_input_iter
@@ -1290,7 +1318,7 @@ class UnaryPointwiseBenchmark(Benchmark):
                 ),
             )
 
-    def materialize_case(self, case: BenchmarkCaseSpec):
+    def build_inputs(self, case: BenchmarkCaseSpec):
         shape = case.builder_args[0].builder_args[0]
         inp = generate_tensor_input(shape, case.dtype, self.device)
         return (inp,)
@@ -1303,13 +1331,13 @@ class UnaryPointwiseBenchmark(Benchmark):
 class UnaryPointwiseOutBenchmark(UnaryPointwiseBenchmark):
     def get_input_iter(self, dtype) -> Generator:
         for case in self.get_case_iter(dtype):
-            yield self.materialize_case(case)
+            yield self.build_inputs(case)
 
     def supports_cases(self) -> bool:
         if (
             type(self).get_case_iter is not UnaryPointwiseOutBenchmark.get_case_iter
-            and type(self).materialize_case
-            is not UnaryPointwiseOutBenchmark.materialize_case
+            and type(self).build_inputs
+            is not UnaryPointwiseOutBenchmark.build_inputs
         ):
             return True
         return type(self).get_input_iter is UnaryPointwiseOutBenchmark.get_input_iter
@@ -1325,7 +1353,7 @@ class UnaryPointwiseOutBenchmark(UnaryPointwiseBenchmark):
                 ),
             )
 
-    def materialize_case(self, case: BenchmarkCaseSpec):
+    def build_inputs(self, case: BenchmarkCaseSpec):
         shape = case.builder_args[0].builder_args[0]
         inp = generate_tensor_input(shape, case.dtype, self.device)
         out = torch.empty_like(inp)
@@ -1399,7 +1427,7 @@ def binary_case_fn(shape, dtype):
     )
 
 
-def materialize_binary_case(plan, dtype, device):
+def build_inputs_binary_case(plan, dtype, device):
     shape = plan.builder_args[0]
     inp1 = generate_tensor_input(shape, dtype, device)
     inp2 = generate_tensor_input(shape, dtype, device)
@@ -1414,12 +1442,12 @@ def unary_case_fn(shape, dtype):
     )
 
 
-def materialize_unary_case(plan, dtype, device):
+def build_inputs_unary_case(plan, dtype, device):
     shape = plan.builder_args[0]
     return (generate_tensor_input(shape, dtype, device),)
 
 
-def materialize_from_generic_input_fn(input_fn):
+def build_inputs_from_generic_input_fn(input_fn):
     """Adapt a one-case GenericBenchmark input factory as stage two.
 
     The corresponding case planner stores ``(shape, input_index)`` in

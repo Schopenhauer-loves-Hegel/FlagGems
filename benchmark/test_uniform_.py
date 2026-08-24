@@ -22,7 +22,7 @@ from . import base, consts
 def test_uniform_():
     bench = base.GenericBenchmark(
         case_fn=base.unary_case_fn,
-        materialize_fn=base.materialize_unary_case,
+        build_inputs_fn=base.build_inputs_unary_case,
         op_name="uniform_",
         torch_op=torch.Tensor.uniform_,
         dtypes=consts.FLOAT_DTYPES,

@@ -24,7 +24,7 @@ class BroadcastTensorsBenchmark(base.Benchmark):
 
     def get_input_iter(self, dtype) -> Generator:
         for case in self.get_case_iter(dtype):
-            yield self.materialize_case(case)
+            yield self.build_inputs(case)
 
     def supports_cases(self) -> bool:
         return type(self).get_input_iter is BroadcastTensorsBenchmark.get_input_iter
@@ -48,7 +48,7 @@ class BroadcastTensorsBenchmark(base.Benchmark):
                 ),
             )
 
-    def materialize_case(self, case):
+    def build_inputs(self, case):
         plan = case.builder_args[0]
         shape_a, shape_b = plan.builder_args
         inp1 = utils.generate_tensor_input(shape_a, case.dtype, self.device)

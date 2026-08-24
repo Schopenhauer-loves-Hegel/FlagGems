@@ -71,7 +71,7 @@ def test_upsample_bilinear2d_aa():
         dtypes = consts.FLOAT_DTYPES
     bench = UpsampleBenchmark(
         case_fn=upsample_bilinear2d_aa_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             upsample_bilinear2d_aa_input_fn
         ),
         op_name="upsample_bilinear2d_aa",

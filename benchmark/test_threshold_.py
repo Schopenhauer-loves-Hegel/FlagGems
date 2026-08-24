@@ -37,7 +37,7 @@ def test_threshold_():
     bench = base.GenericBenchmark(
         op_name="threshold_",
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
         torch_op=lambda x: torch.threshold_(x, 0.0, -1.0),
         dtypes=consts.FLOAT_DTYPES,
         is_inplace=True,

@@ -105,7 +105,7 @@ class BenchConfig:
         self.preflight_only = False
         self.profile_only = False
         self.profile_warmup = 10
-        self.profile_iterations = 100
+        self.profile_iterations = 1
         self.current_nodeid = None
         self.available_case_ids = set()
         self.executed_case_ids = set()
@@ -199,7 +199,7 @@ def pytest_addoption(parser):
         "--profile-iterations",
         action="store",
         type=int,
-        default=100,
+        default=1,
         help="Candidate-only captured invocation count for --profile-only.",
     )
 

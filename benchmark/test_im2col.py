@@ -64,7 +64,7 @@ class Im2colBenchmark(base.Benchmark):
                 )
                 ordinal += 1
 
-    def materialize_case(self, case):
+    def build_inputs(self, case):
         shape, config_index = case.builder_args[0].builder_args
         for index, input in enumerate(
             self.im2col_input_fn(shape, case.dtype, self.device)

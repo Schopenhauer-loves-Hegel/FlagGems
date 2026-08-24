@@ -39,6 +39,6 @@ def test_functional_sym_constrain_range_for_size():
         torch_op=torch.ops.aten._functional_sym_constrain_range_for_size,
         dtypes=consts.FLOAT_DTYPES,
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
     )
     bench.run()

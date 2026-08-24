@@ -138,7 +138,7 @@ def test_scatter_reduce_add():
         op_name="scatter_reduce",
         torch_op=torch.scatter,
         case_fn=scatter_case_fn_factory("add", doubled_index=True),
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             scatter_input_fn_factory("add")
         ),
         get_gbps=gather_scatter_gbps,
@@ -156,7 +156,7 @@ def test_scatter_reduce_multiply():
         op_name="scatter_reduce",
         torch_op=torch.scatter,
         case_fn=scatter_case_fn_factory("multiply", doubled_index=True),
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             scatter_input_fn_factory("multiply")
         ),
         get_gbps=gather_scatter_gbps,
@@ -165,16 +165,16 @@ def test_scatter_reduce_multiply():
     bench.run()
 
 
-@pytest.mark.scatter_reduce_
+@pytest.mark.scatter_legacy_reduce_
 @pytest.mark.skipif(
     flag_gems.vendor_name == "tsingmicro", reason="Issue #4131: not working"
 )
 def test_scatter_reduce_add_inplace():
     bench = TensorSelectBenchmark(
-        op_name="scatter_reduce_",
+        op_name="scatter_",
         torch_op=torch.Tensor.scatter_,
         case_fn=scatter_case_fn_factory("add"),
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             scatter_inplace_input_fn_factory("add")
         ),
         get_gbps=gather_scatter_gbps,
@@ -184,16 +184,16 @@ def test_scatter_reduce_add_inplace():
     bench.run()
 
 
-@pytest.mark.scatter_reduce_
+@pytest.mark.scatter_legacy_reduce_
 @pytest.mark.skipif(
     flag_gems.vendor_name == "tsingmicro", reason="Issue #4131: not working"
 )
 def test_scatter_reduce_multiply_inplace():
     bench = TensorSelectBenchmark(
-        op_name="scatter_reduce_",
+        op_name="scatter_",
         torch_op=torch.Tensor.scatter_,
         case_fn=scatter_case_fn_factory("multiply"),
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             scatter_inplace_input_fn_factory("multiply")
         ),
         get_gbps=gather_scatter_gbps,
@@ -212,7 +212,7 @@ def test_scatter_reduce_two_sum():
         op_name="scatter_reduce.two",
         torch_op=torch.scatter_reduce,
         case_fn=scatter_case_fn_factory("sum"),
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             scatter_reduce_input_fn_factory("sum")
         ),
         get_gbps=gather_scatter_gbps,
@@ -230,7 +230,7 @@ def test_scatter_reduce_two_amax():
         op_name="scatter_reduce.two",
         torch_op=torch.scatter_reduce,
         case_fn=scatter_case_fn_factory("amax"),
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             scatter_reduce_input_fn_factory("amax")
         ),
         get_gbps=gather_scatter_gbps,

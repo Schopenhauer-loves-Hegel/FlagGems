@@ -319,7 +319,7 @@ def test__flash_attention_forward():
     bench = FlashAttentionForwardBenchmark(
         op_name="_flash_attention_forward",
         case_fn=flash_attention_forward_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             _flash_attention_forward_input_fn
         ),
         torch_op=torch.ops.aten._flash_attention_forward.default,
@@ -337,7 +337,7 @@ def test_flash_attention_forward():
     bench = FlashAttentionForwardBenchmark(
         op_name="flash_attention_forward",
         case_fn=flash_attention_forward_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             flash_attention_forward_input_fn
         ),
         torch_op=torch_flash_attention_forward,

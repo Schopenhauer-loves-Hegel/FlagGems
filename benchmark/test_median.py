@@ -39,8 +39,8 @@ class MedianNoDimBenchmark(base.Benchmark):
                 ),
             )
 
-    def materialize_case(self, case):
-        return self._materialize_from_legacy_shape_case(case)
+    def build_inputs(self, case):
+        return self._build_inputs_from_legacy_shape_case(case)
 
 
 class MedianReductionBenchmark(base.Benchmark):
@@ -95,7 +95,7 @@ class MedianReductionBenchmark(base.Benchmark):
                 ),
             )
 
-    def materialize_case(self, case):
+    def build_inputs(self, case):
         plan = case.builder_args[0]
         inp = utils.generate_tensor_input(
             plan.shape["input"], case.dtype, self.device

@@ -39,7 +39,7 @@ def test_xlogy():
         op_name="xlogy",
         torch_op=torch.xlogy,
         case_fn=xlogy_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(xlogy_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(xlogy_input_fn),
         dtypes=consts.FLOAT_DTYPES,
     )
     bench.run()

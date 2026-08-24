@@ -44,7 +44,7 @@ def svd_case_fn(shape, dtype):
 def test_linalg_svdvals():
     bench = SvdBenchmark(
         case_fn=svd_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(svd_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(svd_input_fn),
         op_name="linalg_svdvals",
         torch_op=torch.linalg.svdvals,
         # Only float32 for SVD on CUDA (PyTorch limitation)

@@ -54,6 +54,6 @@ def test_kthvalue():
         # the kthvalue op auto-converts non-fp32 inputs internally.
         dtypes=[torch.float32],
         case_fn=kthvalue_case_fn,
-        materialize_fn=materialize_kthvalue_case,
+        build_inputs_fn=materialize_kthvalue_case,
     )
     bench.run()

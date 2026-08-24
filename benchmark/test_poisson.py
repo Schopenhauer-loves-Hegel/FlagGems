@@ -28,7 +28,7 @@ def _case_fn(shape, dtype):
     )
 
 
-def _materialize_fn(plan, dtype, device):
+def _build_inputs_fn(plan, dtype, device):
     return (torch.rand(plan.builder_args[0], dtype=dtype, device=device),)
 
 
@@ -41,7 +41,7 @@ def test_poisson():
         op_name="poisson",
         torch_op=torch.poisson,
         case_fn=_case_fn,
-        materialize_fn=_materialize_fn,
+        build_inputs_fn=_build_inputs_fn,
         dtypes=consts.FLOAT_DTYPES,
     )
     bench.run()

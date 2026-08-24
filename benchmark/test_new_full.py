@@ -37,7 +37,7 @@ def test_new_full():
     bench = base.GenericBenchmark(
         op_name="new_full",
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
         torch_op=torch.Tensor.new_full,
     )
     bench.run()

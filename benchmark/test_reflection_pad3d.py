@@ -60,8 +60,8 @@ class ReflectionPad3dBenchmark(base.Benchmark):
                 ),
             )
 
-    def materialize_case(self, case):
-        return self._materialize_from_legacy_shape_case(case)
+    def build_inputs(self, case):
+        return self._build_inputs_from_legacy_shape_case(case)
 
 
 @pytest.mark.reflection_pad3d
@@ -123,8 +123,8 @@ class ReflectionPad3dOutBenchmark(base.Benchmark):
                 ),
             )
 
-    def materialize_case(self, case):
-        return self._materialize_from_legacy_shape_case(case)
+    def build_inputs(self, case):
+        return self._build_inputs_from_legacy_shape_case(case)
 
 
 @pytest.mark.reflection_pad3d_out

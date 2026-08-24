@@ -117,7 +117,7 @@ class AvgPool3dBenchmark(base.GenericBenchmark):
                 )
                 ordinal += 1
 
-    def materialize_case(self, case):
+    def build_inputs(self, case):
         shape, config = case.builder_args[0].builder_args
         inp = utils.generate_tensor_input(shape, case.dtype, self.device)
         return inp, config

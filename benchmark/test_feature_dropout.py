@@ -41,7 +41,7 @@ def _case_fn(shape, dtype):
 def test_feature_dropout():
     bench = base.GenericBenchmarkExcluse1D(
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
         op_name="feature_dropout",
         torch_op=torch.feature_dropout,
         dtypes=consts.FLOAT_DTYPES,
@@ -56,7 +56,7 @@ def test_feature_dropout():
 def test_feature_dropout_():
     bench = base.GenericBenchmarkExcluse1D(
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
         op_name="feature_dropout_",
         torch_op=torch.feature_dropout_,
         dtypes=consts.FLOAT_DTYPES,

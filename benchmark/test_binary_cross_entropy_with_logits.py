@@ -22,7 +22,7 @@ def _case_fn(shape, dtype):
 def test_binary_cross_entropy_with_logits():
     bench = base.GenericBenchmark(
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
         op_name="binary_cross_entropy_with_logits",
         torch_op=torch.ops.aten.binary_cross_entropy_with_logits,
         dtypes=consts.FLOAT_DTYPES,

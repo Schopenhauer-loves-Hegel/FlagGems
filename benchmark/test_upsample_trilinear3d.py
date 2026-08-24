@@ -70,7 +70,7 @@ def test_upsample_trilinear3d(align_corners):
 
     bench = UpsampleBenchmark(
         case_fn=upsample_trilinear3d_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             upsample_trilinear3d_input_fn
         ),
         op_name="upsample_trilinear3d",

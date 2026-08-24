@@ -59,7 +59,7 @@ class AdaptiveMaxPool3dBackwardBenchmark(base.Benchmark):
                 ),
             )
 
-    def materialize_case(self, case):
+    def build_inputs(self, case):
         shape, output_size = case.builder_args[0].builder_args
         x = torch.randn(shape, dtype=case.dtype, device=self.device)
         output, indices = torch.nn.functional.adaptive_max_pool3d(

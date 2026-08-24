@@ -26,7 +26,7 @@ def _case_fn(shape, dtype):
 def test_special_chebyshev_polynomial_u():
     bench = base.GenericBenchmarkExcluse1D(
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
         op_name="special_chebyshev_polynomial_u",
         # torch.special.chebyshev_polynomial_u only supports float32 on CPU/CUDA
         dtypes=[torch.float32],

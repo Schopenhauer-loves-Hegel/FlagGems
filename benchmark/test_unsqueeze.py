@@ -28,7 +28,7 @@ def test_unsqueeze():
     bench = base.GenericBenchmark(
         op_name="unsqueeze",
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
         torch_op=torch.unsqueeze,
         dtypes=consts.FLOAT_DTYPES,
     )
@@ -40,7 +40,7 @@ def test_unsqueeze_():
     bench = base.GenericBenchmark(
         op_name="unsqueeze_",
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
         torch_op=torch.Tensor.unsqueeze_,
         dtypes=consts.FLOAT_DTYPES,
         is_inplace=True,

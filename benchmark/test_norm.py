@@ -31,7 +31,7 @@ def norm_scalaropt_dim_input_fn(shape, dtype, device):
 def test_norm():
     bench = base.GenericBenchmarkExcluse1D(
         case_fn=norm_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(norm_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(norm_input_fn),
         op_name="norm",
         torch_op=torch.norm,
         dtypes=consts.FLOAT_DTYPES,

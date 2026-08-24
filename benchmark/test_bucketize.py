@@ -44,7 +44,7 @@ def test_bucketize_perf():
     bench = base.GenericBenchmark(
         op_name="bucketize",
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
         torch_op=torch.bucketize,
         dtypes=dtypes,
     )

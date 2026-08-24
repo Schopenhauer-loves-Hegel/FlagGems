@@ -66,7 +66,7 @@ def test_weight_norm_dim0():
     bench = base.GenericBenchmarkExcluse1D(
         op_name="weight_norm",
         case_fn=_weight_norm_case_fn(lambda shape: 0),
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             weight_norm_input_fn
         ),
         torch_op=torch.ops.aten._weight_norm.default,
@@ -83,7 +83,7 @@ def test_weight_norm_dim_last():
     bench = base.GenericBenchmarkExcluse1D(
         op_name="weight_norm",
         case_fn=_weight_norm_case_fn(lambda shape: len(shape) - 1),
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             weight_norm_input_fn_last
         ),
         torch_op=torch.ops.aten._weight_norm.default,

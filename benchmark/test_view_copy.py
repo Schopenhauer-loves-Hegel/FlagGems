@@ -34,7 +34,7 @@ class ViewCopyBenchmark(base.UnaryPointwiseBenchmark):
                 ),
             )
 
-    def materialize_case(self, case):
+    def build_inputs(self, case):
         shape, size = case.builder_args[0].builder_args
         inp = base.generate_tensor_input(shape, case.dtype, self.device)
         return inp, size

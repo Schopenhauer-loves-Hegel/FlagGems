@@ -107,7 +107,7 @@ def cudnn_batch_norm_backward_case_fn(shape, dtype):
 def test_cudnn_batch_norm_backward():
     bench = NormBenchmark(
         case_fn=cudnn_batch_norm_backward_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(
             cudnn_batch_norm_backward_input_fn
         ),
         op_name="cudnn_batch_norm_backward",

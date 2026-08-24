@@ -27,13 +27,13 @@ def test_is_nonzero():
             params={"value": 1},
         )
 
-    def is_nonzero_materialize_fn(plan, dtype, device):
+    def is_nonzero_build_inputs_fn(plan, dtype, device):
         del plan
         return (torch.tensor([1], dtype=dtype, device=device),)
 
     bench = base.GenericBenchmark(
         case_fn=is_nonzero_case_fn,
-        materialize_fn=is_nonzero_materialize_fn,
+        build_inputs_fn=is_nonzero_build_inputs_fn,
         op_name="is_nonzero",
         torch_op=torch.is_nonzero,
         dtypes=consts.FLOAT_DTYPES,

@@ -27,7 +27,7 @@ def _case_fn(shape, dtype):
     )
 
 
-def _materialize_fn(plan, dtype, device):
+def _build_inputs_fn(plan, dtype, device):
     shape = plan.builder_args[0]
     inp = utils.generate_tensor_input(shape, dtype, device)
     return inp, plan.params["dim"]
@@ -37,7 +37,7 @@ def _materialize_fn(plan, dtype, device):
 def test_logsumexp():
     bench = base.GenericBenchmarkExcluse1D(
         case_fn=_case_fn,
-        materialize_fn=_materialize_fn,
+        build_inputs_fn=_build_inputs_fn,
         op_name="logsumexp",
         torch_op=torch.logsumexp,
         dtypes=consts.FLOAT_DTYPES,

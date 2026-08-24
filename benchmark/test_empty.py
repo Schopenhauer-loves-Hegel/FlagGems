@@ -26,7 +26,7 @@ def empty_case_fn(shape, dtype):
     )
 
 
-def empty_materialize_fn(plan, dtype, device):
+def empty_build_inputs_fn(plan, dtype, device):
     del dtype, device
     # Keep ``size`` as one public ABI argument instead of flattening the shape
     # tuple into multiple positional arguments.
@@ -57,6 +57,6 @@ def test_empty():
         torch_op=torch.empty,
         dtypes=consts.FLOAT_DTYPES,
         case_fn=empty_case_fn,
-        materialize_fn=empty_materialize_fn,
+        build_inputs_fn=empty_build_inputs_fn,
     )
     bench.run()

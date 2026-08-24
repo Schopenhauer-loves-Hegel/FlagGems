@@ -41,7 +41,7 @@ def _case_fn(shape, dtype):
 def test_histc():
     bench = base.GenericBenchmark2DOnly(
         case_fn=_case_fn,
-        materialize_fn=base.materialize_from_generic_input_fn(_input_fn),
+        build_inputs_fn=base.build_inputs_from_generic_input_fn(_input_fn),
         op_name="histc",
         torch_op=torch.histc,
         dtypes=[torch.float32],

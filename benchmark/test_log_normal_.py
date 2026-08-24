@@ -24,7 +24,7 @@ def test_log_normal_():
         op_name="log_normal_",
         torch_op=torch.Tensor.log_normal_,
         case_fn=base.unary_case_fn,
-        materialize_fn=base.materialize_unary_case,
+        build_inputs_fn=base.build_inputs_unary_case,
         dtypes=consts.FLOAT_DTYPES,
     )
     bench.run()
