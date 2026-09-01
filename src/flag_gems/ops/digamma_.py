@@ -77,6 +77,7 @@ def digamma_kernel_(
 
 
 def digamma_(self):
+    logger.debug("GEMS DIGAMMA_")
     x = self
 
     # Handle non-contiguous tensors by operating on a contiguous copy and copying back
